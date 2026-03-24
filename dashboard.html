@@ -324,12 +324,13 @@
           const item = document.createElement('div');
           item.className = 'company-item';
 
-          const hasTwitter = company.twitter_accounts && company.twitter_accounts.length > 0;
+          // Check if twitter_accounts exists (could be object or null)
+          const hasTwitter = company.twitter_accounts && company.twitter_accounts.username;
 
           item.innerHTML = `
             <div>
               <div class="company-name">${company.name}</div>
-              ${hasTwitter ? `<small style="color: #718096;">@${company.twitter_accounts[0].username}</small>` : ''}
+              ${hasTwitter ? `<small style="color: #718096;">@${company.twitter_accounts.username}</small>` : ''}
             </div>
             <div style="display: flex; align-items: center;">
               <span class="status ${hasTwitter ? 'connected' : 'disconnected'}">
