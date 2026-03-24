@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grayjack Social Media Manager</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      color: #2d3748;
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: #718096;
+      font-size: 1rem;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+
+    .card h2 {
+      color: #2d3748;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .icon {
+      width: 32px;
+      height: 32px;
+      display: inline-block;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      color: #4a5568;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      font-family: inherit;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .secondary-btn {
+      background: #4a5568;
+      margin-top: 0.5rem;
+    }
+
+    .secondary-btn:hover {
+      background: #2d3748;
+    }
+
+    .success {
+      background: #48bb78;
+      color: white;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .error {
+      background: #f56565;
+      color: white;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .company-list {
+      margin-top: 1rem;
+    }
+
+    .company-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      background: #f7fafc;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+    }
+
+    .company-name {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .status {
+      font-size: 0.875rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+
+    .status.connected {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+
+    .status.disconnected {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+
+    .connect-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      width: auto;
+      margin-left: 0.5rem;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Grayjack Social Media Manager</h1>
+      <p class="subtitle">Manage Twitter accounts and automate posts for all Grayjack companies</p>
+    </header>
+
+    <div class="cards">
+      <div class="card">
+        <h2>
+          <span class="icon">🏢</span>
+          Add Company
+        </h2>
+        <div id="addCompanySuccess" class="success"></div>
+        <div id="addCompanyError" class="error"></div>
+        <form id="addCompanyForm">
+          <div class="form-group">
+            <label for="companyName">Company Name</label>
+            <input type="text" id="companyName" placeholder="Enter company name" required>
+          </div>
+          <div class="form-group">
+            <label for="companySlug">Company Slug (URL-safe identifier)</label>
+            <input type="text" id="companySlug" placeholder="e.g., company-name" pattern="[a-z0-9-]+" required>
+          </div>
+          <button type="submit" id="addCompanyBtn">Add Company</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>
+          <span class="icon">🐦</span>
+          Post to Twitter
+        </h2>
+        <div id="postSuccess" class="success"></div>
+        <div id="postError" class="error"></div>
+        <form id="postForm">
+          <div class="form-group">
+            <label for="selectCompany">Select Company</label>
+            <select id="selectCompany" required>
+              <option value="">Loading companies...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="tweetText">Tweet Text</label>
+            <textarea id="tweetText" placeholder="What's happening?" maxlength="280" required></textarea>
+            <small style="color: #718096; font-size: 0.875rem;"><span id="charCount">0</span>/280</small>
+          </div>
+          <button type="submit" id="postBtn">Post Tweet</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span class="icon">📋</span>
+        Connected Accounts
+      </h2>
+      <div id="companiesList" class="company-list">
+        <p style="color: #718096;">Loading companies...</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    const SUPABASE_URL = 'https://edkisozjywgkgqczglbm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVka2lzb3pqeXdna2dxY3pnbGJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODA1NDEsImV4cCI6MjA4OTg1NjU0MX0.zp0aytJNgaKKndLeUgqkMw6aikSc-5FHvRsbjf9CWt8';
+
+    const showSuccess = (elementId, message) => {
+      const el = document.getElementById(elementId);
+      el.textContent = message;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 5000);
+    };
+
+    const showError = (elementId, message) => {
+      const el = document.getElementById(elementId);
+      el.textContent = message;
+      el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 5000);
+    };
+
+    const loadCompanies = async () => {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies?select=*,twitter_accounts(*)`, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        const companies = await response.json();
+
+        const select = document.getElementById('selectCompany');
+        select.innerHTML = '<option value="">Select a company</option>';
+
+        const list = document.getElementById('companiesList');
+        if (companies.length === 0) {
+          list.innerHTML = '<p style="color: #718096;">No companies added yet.</p>';
+          return;
+        }
+
+        list.innerHTML = '';
+        companies.forEach(company => {
+          const option = document.createElement('option');
+          option.value = company.id;
+          option.textContent = company.name;
+          select.appendChild(option);
+
+          const item = document.createElement('div');
+          item.className = 'company-item';
+
+          const hasTwitter = company.twitter_accounts && company.twitter_accounts.length > 0;
+
+          item.innerHTML = `
+            <div>
+              <div class="company-name">${company.name}</div>
+              ${hasTwitter ? `<small style="color: #718096;">@${company.twitter_accounts[0].username}</small>` : ''}
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span class="status ${hasTwitter ? 'connected' : 'disconnected'}">
+                ${hasTwitter ? '✓ Connected' : 'Not Connected'}
+              </span>
+              ${!hasTwitter ? `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>` : ''}
+            </div>
+          `;
+          list.appendChild(item);
+        });
+      } catch (error) {
+        console.error('Error loading companies:', error);
+        document.getElementById('companiesList').innerHTML = '<p style="color: #f56565;">Error loading companies</p>';
+      }
+    };
+
+    window.connectTwitter = async (companyId) => {
+      try {
+        const origin = window.location.origin;
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize?company_id=${companyId}&origin=${encodeURIComponent(origin)}`, {
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        const data = await response.json();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
+        } else {
+          alert('Failed to initiate Twitter authorization');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to connect to Twitter');
+      }
+    };
+
+    document.getElementById('addCompanyForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('addCompanyBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span>';
+
+      const name = document.getElementById('companyName').value;
+      const slug = document.getElementById('companySlug').value;
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({ name, slug })
+        });
+
+        if (response.ok) {
+          showSuccess('addCompanySuccess', `${name} added successfully!`);
+          document.getElementById('addCompanyForm').reset();
+          loadCompanies();
+        } else {
+          const error = await response.json();
+          showError('addCompanyError', error.message || 'Failed to add company');
+        }
+      } catch (error) {
+        showError('addCompanyError', 'Network error. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add Company';
+      }
+    });
+
+    document.getElementById('postForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('postBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span>';
+
+      const companyId = document.getElementById('selectCompany').value;
+      const text = document.getElementById('tweetText').value;
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/post`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ company_id: companyId, text })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showSuccess('postSuccess', 'Tweet posted successfully!');
+          document.getElementById('tweetText').value = '';
+          document.getElementById('charCount').textContent = '0';
+        } else {
+          showError('postError', data.error || 'Failed to post tweet');
+        }
+      } catch (error) {
+        showError('postError', 'Network error. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Post Tweet';
+      }
+    });
+
+    document.getElementById('tweetText').addEventListener('input', (e) => {
+      document.getElementById('charCount').textContent = e.target.value.length;
+    });
+
+    document.getElementById('companyName').addEventListener('input', (e) => {
+      const slug = e.target.value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-');
+      document.getElementById('companySlug').value = slug;
+    });
+
+    loadCompanies();
+  </script>
+</body>
+</html>
