@@ -260,6 +260,12 @@
             <textarea id="tweetText" placeholder="What's happening?" maxlength="280" required></textarea>
             <small style="color: #718096; font-size: 0.875rem;"><span id="charCount">0</span>/280</small>
           </div>
+          <div class="form-group">
+            <label for="mediaFiles">Media (Images/Videos) - Optional</label>
+            <input type="file" id="mediaFiles" accept="image/*,video/*" multiple>
+            <small style="color: #718096; font-size: 0.875rem;">Up to 4 images or 1 video (max 5MB per image, 512MB for video)</small>
+            <div id="mediaPreview" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;"></div>
+          </div>
           <button type="submit" id="postBtn">Post Tweet</button>
         </form>
       </div>
@@ -413,15 +419,23 @@
 
       const companyId = document.getElementById('selectCompany').value;
       const text = document.getElementById('tweetText').value;
+      const mediaFiles = document.getElementById('mediaFiles').files;
 
       try {
+        const formData = new FormData();
+        formData.append('company_id', companyId);
+        formData.append('text', text);
+
+        for (let i = 0; i < mediaFiles.length; i++) {
+          formData.append('media', mediaFiles[i]);
+        }
+
         const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/post`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json'
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           },
-          body: JSON.stringify({ company_id: companyId, text })
+          body: formData
         });
 
         const data = await response.json();
@@ -429,6 +443,8 @@
           showSuccess('postSuccess', 'Tweet posted successfully!');
           document.getElementById('tweetText').value = '';
           document.getElementById('charCount').textContent = '0';
+          document.getElementById('mediaFiles').value = '';
+          document.getElementById('mediaPreview').innerHTML = '';
         } else {
           showError('postError', data.error || 'Failed to post tweet');
         }
@@ -442,6 +458,43 @@
 
     document.getElementById('tweetText').addEventListener('input', (e) => {
       document.getElementById('charCount').textContent = e.target.value.length;
+    });
+
+    document.getElementById('mediaFiles').addEventListener('change', (e) => {
+      const preview = document.getElementById('mediaPreview');
+      preview.innerHTML = '';
+
+      const files = Array.from(e.target.files);
+      files.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const div = document.createElement('div');
+          div.style.position = 'relative';
+          div.style.width = '100px';
+          div.style.height = '100px';
+
+          if (file.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = event.target.result;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'cover';
+            img.style.borderRadius = '8px';
+            div.appendChild(img);
+          } else if (file.type.startsWith('video/')) {
+            const video = document.createElement('video');
+            video.src = event.target.result;
+            video.style.width = '100%';
+            video.style.height = '100%';
+            video.style.objectFit = 'cover';
+            video.style.borderRadius = '8px';
+            div.appendChild(video);
+          }
+
+          preview.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+      });
     });
 
     document.getElementById('companyName').addEventListener('input', (e) => {

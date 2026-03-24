@@ -251,7 +251,23 @@ Deno.serve(async (req: Request) => {
     }
 
     if (path === "/post" && req.method === "POST") {
-      const { company_id, text } = await req.json();
+      const contentType = req.headers.get("content-type") || "";
+      let company_id: string;
+      let text: string;
+      let mediaFiles: File[] = [];
+
+      if (contentType.includes("multipart/form-data")) {
+        const formData = await req.formData();
+        company_id = formData.get("company_id") as string;
+        text = formData.get("text") as string;
+
+        const media = formData.getAll("media");
+        mediaFiles = media.filter((m): m is File => m instanceof File);
+      } else {
+        const body = await req.json();
+        company_id = body.company_id;
+        text = body.text;
+      }
 
       if (!company_id || !text) {
         return new Response(
@@ -280,13 +296,69 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const mediaIds: string[] = [];
+
+      if (mediaFiles.length > 0) {
+        for (const file of mediaFiles) {
+          const arrayBuffer = await file.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+
+          const uploadResponse = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${account.access_token}`,
+            },
+            body: (() => {
+              const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+              const formDataParts: Uint8Array[] = [];
+
+              const encoder = new TextEncoder();
+              formDataParts.push(encoder.encode(`--${boundary}\r\n`));
+              formDataParts.push(encoder.encode(`Content-Disposition: form-data; name="media"; filename="${file.name}"\r\n`));
+              formDataParts.push(encoder.encode(`Content-Type: ${file.type}\r\n\r\n`));
+              formDataParts.push(uint8Array);
+              formDataParts.push(encoder.encode(`\r\n--${boundary}--\r\n`));
+
+              const totalLength = formDataParts.reduce((acc, part) => acc + part.length, 0);
+              const combined = new Uint8Array(totalLength);
+              let offset = 0;
+              for (const part of formDataParts) {
+                combined.set(part, offset);
+                offset += part.length;
+              }
+
+              return combined;
+            })(),
+          });
+
+          if (!uploadResponse.ok) {
+            const error = await uploadResponse.text();
+            return new Response(
+              JSON.stringify({ error: "Failed to upload media", details: error }),
+              {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
+
+          const uploadData = await uploadResponse.json();
+          mediaIds.push(uploadData.media_id_string);
+        }
+      }
+
+      const tweetBody: { text: string; media?: { media_ids: string[] } } = { text };
+      if (mediaIds.length > 0) {
+        tweetBody.media = { media_ids: mediaIds };
+      }
+
       const postResponse = await fetch("https://api.twitter.com/2/tweets", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${account.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify(tweetBody),
       });
 
       if (!postResponse.ok) {
