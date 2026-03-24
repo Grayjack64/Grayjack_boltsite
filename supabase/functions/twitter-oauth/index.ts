@@ -303,33 +303,15 @@ Deno.serve(async (req: Request) => {
           const arrayBuffer = await file.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
 
-          const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+          // Convert binary to base64 and use media_data parameter
+          const base64Data = btoa(String.fromCharCode(...uint8Array));
           const uploadResponse = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${account.access_token}`,
-              "Content-Type": `multipart/form-data; boundary=${boundary}`,
+              "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: (() => {
-              const formDataParts: Uint8Array[] = [];
-
-              const encoder = new TextEncoder();
-              formDataParts.push(encoder.encode(`--${boundary}\r\n`));
-              formDataParts.push(encoder.encode(`Content-Disposition: form-data; name="media"; filename="${file.name}"\r\n`));
-              formDataParts.push(encoder.encode(`Content-Type: ${file.type}\r\n\r\n`));
-              formDataParts.push(uint8Array);
-              formDataParts.push(encoder.encode(`\r\n--${boundary}--\r\n`));
-
-              const totalLength = formDataParts.reduce((acc, part) => acc + part.length, 0);
-              const combined = new Uint8Array(totalLength);
-              let offset = 0;
-              for (const part of formDataParts) {
-                combined.set(part, offset);
-                offset += part.length;
-              }
-
-              return combined;
-            })(),
+            body: `media_data=${encodeURIComponent(base64Data)}`,
           });
 
           if (!uploadResponse.ok) {
