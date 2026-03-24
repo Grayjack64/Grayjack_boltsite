@@ -303,13 +303,14 @@ Deno.serve(async (req: Request) => {
           const arrayBuffer = await file.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
 
+          const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
           const uploadResponse = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${account.access_token}`,
+              "Content-Type": `multipart/form-data; boundary=${boundary}`,
             },
             body: (() => {
-              const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
               const formDataParts: Uint8Array[] = [];
 
               const encoder = new TextEncoder();
