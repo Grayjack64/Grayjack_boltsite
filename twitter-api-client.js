@@ -21,9 +21,11 @@ class TwitterAPIClient {
    * Post a tweet for a specific company
    * @param {string} companyId - The UUID of the company
    * @param {string} text - The tweet text (max 280 characters)
+   * @param {Object} [options] - Optional parameters
+   * @param {File[]|Blob[]} [options.media] - Media files to attach (up to 4 images or 1 video)
    * @returns {Promise<{success: boolean, tweet_id?: string, text?: string, error?: string}>}
    */
-  async postTweet(companyId, text) {
+  async postTweet(companyId, text, options = {}) {
     try {
       if (!companyId || !text) {
         throw new Error('companyId and text are required');
@@ -33,14 +35,38 @@ class TwitterAPIClient {
         throw new Error('Tweet text must be 280 characters or less');
       }
 
-      const response = await fetch(`${this.baseUrl}/post`, {
-        method: 'POST',
-        headers: this.headers,
-        body: JSON.stringify({
-          company_id: companyId,
-          text: text
-        })
-      });
+      const mediaFiles = options.media || [];
+
+      if (mediaFiles.length > 4) {
+        throw new Error('Maximum 4 media files per tweet');
+      }
+
+      let response;
+
+      if (mediaFiles.length > 0) {
+        const formData = new FormData();
+        formData.append('company_id', companyId);
+        formData.append('text', text);
+        for (const file of mediaFiles) {
+          formData.append('media', file);
+        }
+        response = await fetch(`${this.baseUrl}/post`, {
+          method: 'POST',
+          headers: {
+            'Authorization': this.headers['Authorization'],
+          },
+          body: formData,
+        });
+      } else {
+        response = await fetch(`${this.baseUrl}/post`, {
+          method: 'POST',
+          headers: this.headers,
+          body: JSON.stringify({
+            company_id: companyId,
+            text: text
+          })
+        });
+      }
 
       const data = await response.json();
 
@@ -65,15 +91,17 @@ class TwitterAPIClient {
    * Post a tweet for a company by slug (URL-safe identifier)
    * @param {string} companySlug - The slug of the company (e.g., 'company-name')
    * @param {string} text - The tweet text (max 280 characters)
+   * @param {Object} [options] - Optional parameters
+   * @param {File[]|Blob[]} [options.media] - Media files to attach (up to 4 images or 1 video)
    * @returns {Promise<{success: boolean, tweet_id?: string, text?: string, error?: string}>}
    */
-  async postTweetBySlug(companySlug, text) {
+  async postTweetBySlug(companySlug, text, options = {}) {
     try {
       const companyId = await this.getCompanyIdBySlug(companySlug);
       if (!companyId) {
         throw new Error(`Company with slug '${companySlug}' not found`);
       }
-      return await this.postTweet(companyId, text);
+      return await this.postTweet(companyId, text, options);
     } catch (error) {
       return {
         success: false,
