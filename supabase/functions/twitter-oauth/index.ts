@@ -302,7 +302,15 @@ Deno.serve(async (req: Request) => {
         for (const file of mediaFiles) {
           // Use v1.1 upload endpoint with simple POST (works with OAuth 2.0)
           const arrayBuffer = await file.arrayBuffer();
-          const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          const uint8Array = new Uint8Array(arrayBuffer);
+          // Convert to base64 in chunks to avoid stack overflow on large files
+          let binaryString = "";
+          const chunkSize = 8192;
+          for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, i + chunkSize);
+            binaryString += String.fromCharCode(...chunk);
+          }
+          const base64Data = btoa(binaryString);
 
           const uploadFormData = new FormData();
           uploadFormData.append("media_data", base64Data);
