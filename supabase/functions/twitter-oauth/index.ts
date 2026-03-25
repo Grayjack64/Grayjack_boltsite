@@ -295,9 +295,14 @@ Deno.serve(async (req: Request) => {
           status: rtResponse.status,
           debug: {
             has_consumer_key: !!OAUTH_CONSUMER_KEY,
+            has_consumer_secret: !!OAUTH_CONSUMER_SECRET,
             consumer_key_length: OAUTH_CONSUMER_KEY?.length || 0,
+            consumer_secret_length: OAUTH_CONSUMER_SECRET?.length || 0,
             consumer_key_first_4: OAUTH_CONSUMER_KEY?.substring(0, 4),
-            authorization_header_preview: oauth1Header.substring(0, 100)
+            consumer_secret_first_4: OAUTH_CONSUMER_SECRET?.substring(0, 4),
+            authorization_header_preview: oauth1Header.substring(0, 150),
+            callback_url: callbackUrl,
+            request_url: requestTokenUrl
           }
         }, 400);
       }
