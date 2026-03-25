@@ -4,6 +4,8 @@ import { hmac } from "https://deno.land/x/hmac@v2.0.1/mod.ts";
 // OAuth 1.0a credentials for v1.1 media upload
 const OAUTH_CONSUMER_KEY = Deno.env.get("TWITTER_CONSUMER_KEY") || "";
 const OAUTH_CONSUMER_SECRET = Deno.env.get("TWITTER_CONSUMER_SECRET") || "";
+const OAUTH_ACCESS_TOKEN = Deno.env.get("TWITTER_ACCESS_TOKEN") || "";
+const OAUTH_ACCESS_TOKEN_SECRET = Deno.env.get("TWITTER_ACCESS_TOKEN_SECRET") || "";
 
 /**
  * Generate OAuth 1.0a Authorization header for Twitter v1.1 API
@@ -376,6 +378,8 @@ Deno.serve(async (req: Request) => {
             mediaUploadUrl,
             OAUTH_CONSUMER_KEY,
             OAUTH_CONSUMER_SECRET,
+            OAUTH_ACCESS_TOKEN_SECRET,
+            OAUTH_ACCESS_TOKEN,
           );
 
           const uploadResponse = await fetch(mediaUploadUrl, {
