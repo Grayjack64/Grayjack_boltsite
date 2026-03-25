@@ -303,8 +303,14 @@ Deno.serve(async (req: Request) => {
           const arrayBuffer = await file.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
 
-          // Convert binary to base64 and use media_data parameter
-          const base64Data = btoa(String.fromCharCode(...uint8Array));
+          // Convert binary to base64 in chunks to avoid stack overflow
+          let binaryString = "";
+          const chunkSize = 8192;
+          for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, i + chunkSize);
+            binaryString += String.fromCharCode(...chunk);
+          }
+          const base64Data = btoa(binaryString);
           const uploadResponse = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
             method: "POST",
             headers: {
