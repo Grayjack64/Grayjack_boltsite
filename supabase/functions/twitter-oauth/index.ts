@@ -1,5 +1,4 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { hmac } from "https://deno.land/x/hmac@v2.0.1/mod.ts";
 
 // OAuth 1.0a credentials for v1.1 media upload
 const OAUTH_CONSUMER_KEY = Deno.env.get("TWITTER_CONSUMER_KEY") || "";
@@ -8,17 +7,33 @@ const OAUTH_ACCESS_TOKEN = Deno.env.get("TWITTER_ACCESS_TOKEN") || "";
 const OAUTH_ACCESS_TOKEN_SECRET = Deno.env.get("TWITTER_ACCESS_TOKEN_SECRET") || "";
 
 /**
+ * HMAC-SHA1 using Web Crypto API (works reliably in Deno/Supabase edge functions)
+ */
+async function hmacSha1(key: string, data: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(key),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(data));
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+
+/**
  * Generate OAuth 1.0a Authorization header for Twitter v1.1 API
  * For media uploads with multipart form data, body params are NOT included in the signature.
  */
-function generateOAuth1Header(
+async function generateOAuth1Header(
   method: string,
   url: string,
   consumerKey: string,
   consumerSecret: string,
   tokenSecret: string = "",
   token: string = "",
-): string {
+): Promise<string> {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const nonce = crypto.randomUUID().replace(/-/g, "");
 
@@ -43,9 +58,8 @@ function generateOAuth1Header(
   const baseString = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(paramString)}`;
   const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
 
-  // HMAC-SHA1 signature
-  const signatureBytes = hmac("sha1", signingKey, baseString);
-  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBytes as ArrayBuffer)));
+  // HMAC-SHA1 signature via Web Crypto API
+  const signature = await hmacSha1(signingKey, baseString);
 
   oauthParams.oauth_signature = signature;
 
@@ -373,7 +387,7 @@ Deno.serve(async (req: Request) => {
           uploadFormData.append("media_data", base64Data);
 
           const mediaUploadUrl = "https://upload.twitter.com/1.1/media/upload.json";
-          const oauth1Header = generateOAuth1Header(
+          const oauth1Header = await generateOAuth1Header(
             "POST",
             mediaUploadUrl,
             OAUTH_CONSUMER_KEY,
