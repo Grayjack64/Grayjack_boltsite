@@ -332,19 +332,26 @@
 
           // Check if twitter_accounts exists (could be object or null)
           const hasTwitter = company.twitter_accounts && company.twitter_accounts.username;
+          const hasOAuth1 = hasTwitter && company.twitter_accounts.oauth1_access_token;
 
           item.innerHTML = `
             <div>
               <div class="company-name">${company.name}</div>
               ${hasTwitter ? `<small style="color: #718096;">@${company.twitter_accounts.username}</small>` : ''}
+              ${hasTwitter && !hasOAuth1 ? `<br><small style="color: #f59e0b;">⚠️ Media posting not enabled</small>` : ''}
+              ${hasOAuth1 ? `<br><small style="color: #48bb78;">✓ Media posting enabled</small>` : ''}
             </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
               <span class="status ${hasTwitter ? 'connected' : 'disconnected'}">
                 ${hasTwitter ? '✓ Connected' : 'Not Connected'}
               </span>
               ${hasTwitter ?
                 `<button class="connect-btn" onclick="reconnectTwitter('${company.id}')" style="background: #f59e0b;">Reconnect</button>` :
                 `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>`
+              }
+              ${hasTwitter && !hasOAuth1 ?
+                `<button class="connect-btn" onclick="addMediaPosting('${company.id}')" style="background: #10b981;">Add Media Posting</button>` :
+                ''
               }
             </div>
           `;
@@ -373,6 +380,26 @@
       } catch (error) {
         console.error('Error:', error);
         alert('Failed to connect to Twitter');
+      }
+    };
+
+    window.addMediaPosting = async (companyId) => {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize-v1?company_id=${companyId}`, {
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        const data = await response.json();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
+        } else {
+          alert('Failed to initiate OAuth 1.0a authorization for media posting');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to add media posting capability');
       }
     };
 
