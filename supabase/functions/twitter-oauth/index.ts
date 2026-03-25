@@ -292,9 +292,12 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({
           error: "Failed to get request token",
           details: error,
+          status: rtResponse.status,
           debug: {
             has_consumer_key: !!OAUTH_CONSUMER_KEY,
-            consumer_key_length: OAUTH_CONSUMER_KEY?.length || 0
+            consumer_key_length: OAUTH_CONSUMER_KEY?.length || 0,
+            consumer_key_first_4: OAUTH_CONSUMER_KEY?.substring(0, 4),
+            authorization_header_preview: oauth1Header.substring(0, 100)
           }
         }, 400);
       }
