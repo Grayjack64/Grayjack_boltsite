@@ -338,11 +338,14 @@
               <div class="company-name">${company.name}</div>
               ${hasTwitter ? `<small style="color: #718096;">@${company.twitter_accounts.username}</small>` : ''}
             </div>
-            <div style="display: flex; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span class="status ${hasTwitter ? 'connected' : 'disconnected'}">
                 ${hasTwitter ? '✓ Connected' : 'Not Connected'}
               </span>
-              ${!hasTwitter ? `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>` : ''}
+              ${hasTwitter ?
+                `<button class="connect-btn" onclick="reconnectTwitter('${company.id}')" style="background: #f59e0b;">Reconnect</button>` :
+                `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>`
+              }
             </div>
           `;
           list.appendChild(item);
@@ -370,6 +373,42 @@
       } catch (error) {
         console.error('Error:', error);
         alert('Failed to connect to Twitter');
+      }
+    };
+
+    window.reconnectTwitter = async (companyId) => {
+      if (!confirm('This will disconnect your current Twitter account and reconnect with updated permissions (including media upload). Continue?')) {
+        return;
+      }
+
+      try {
+        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/twitter_accounts?company_id=eq.${companyId}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        if (!deleteResponse.ok) {
+          throw new Error('Failed to disconnect Twitter account');
+        }
+
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize?company_id=${companyId}`, {
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        const data = await response.json();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
+        } else {
+          alert('Failed to initiate Twitter authorization');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to reconnect Twitter account');
       }
     };
 
