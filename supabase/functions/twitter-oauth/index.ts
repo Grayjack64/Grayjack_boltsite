@@ -261,6 +261,13 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "company_id is required" }, 400);
       }
 
+      if (!OAUTH_CONSUMER_KEY || !OAUTH_CONSUMER_SECRET) {
+        return jsonResponse({
+          error: "Twitter OAuth 1.0a credentials not configured",
+          details: "TWITTER_CONSUMER_KEY and TWITTER_CONSUMER_SECRET must be set"
+        }, 500);
+      }
+
       const callbackUrl = "https://grayjackholdings.com/callback-twitter-v1.html";
       const requestTokenUrl = "https://api.twitter.com/oauth/request_token";
 
@@ -282,7 +289,14 @@ Deno.serve(async (req: Request) => {
 
       if (!rtResponse.ok) {
         const error = await rtResponse.text();
-        return jsonResponse({ error: "Failed to get request token", details: error }, 400);
+        return jsonResponse({
+          error: "Failed to get request token",
+          details: error,
+          debug: {
+            has_consumer_key: !!OAUTH_CONSUMER_KEY,
+            consumer_key_length: OAUTH_CONSUMER_KEY?.length || 0
+          }
+        }, 400);
       }
 
       const rtBody = await rtResponse.text();
