@@ -323,7 +323,7 @@ Deno.serve(async (req: Request) => {
           if (!uploadResponse.ok) {
             const error = await uploadResponse.text();
             return new Response(
-              JSON.stringify({ error: "Failed to upload media", details: error }),
+              JSON.stringify({ error: "Failed to upload media", details: error, status_code: uploadResponse.status, status_text: uploadResponse.statusText }),
               {
                 status: 400,
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
