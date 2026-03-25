@@ -300,51 +300,29 @@ Deno.serve(async (req: Request) => {
 
       if (mediaFiles.length > 0) {
         for (const file of mediaFiles) {
-          // Step 1: Initialize upload via v2 media endpoint
-          const initResponse = await fetch("https://api.twitter.com/2/media/upload/initialize", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${account.access_token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              media_type: file.type || "image/png",
-              total_bytes: file.size,
-              media_category: "tweet_image",
-            }),
-          });
-
-          if (!initResponse.ok) {
-            const error = await initResponse.text();
-            return new Response(
-              JSON.stringify({ error: "Failed to initialize media upload", details: error, status_code: initResponse.status }),
-              {
-                status: 400,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
-            );
-          }
-
-          const initData = await initResponse.json();
-          const mediaId = initData.id || initData.media_id_string;
-
-          // Step 2: Append the file data
+          // Use v1.1 upload endpoint with simple POST (works with OAuth 2.0)
           const arrayBuffer = await file.arrayBuffer();
-          const appendFormData = new FormData();
-          appendFormData.append("media_data", new Blob([arrayBuffer], { type: file.type || "image/png" }), file.name);
+          const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-          const appendResponse = await fetch(`https://api.twitter.com/2/media/upload/${mediaId}/append`, {
+          const uploadFormData = new FormData();
+          uploadFormData.append("media_data", base64Data);
+
+          const uploadResponse = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${account.access_token}`,
             },
-            body: appendFormData,
+            body: uploadFormData,
           });
 
-          if (!appendResponse.ok) {
-            const error = await appendResponse.text();
+          if (!uploadResponse.ok) {
+            const error = await uploadResponse.text();
             return new Response(
-              JSON.stringify({ error: "Failed to append media data", details: error, status_code: appendResponse.status }),
+              JSON.stringify({
+                error: "Failed to upload media",
+                details: error,
+                status_code: uploadResponse.status
+              }),
               {
                 status: 400,
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -352,26 +330,8 @@ Deno.serve(async (req: Request) => {
             );
           }
 
-          // Step 3: Finalize the upload
-          const finalizeResponse = await fetch(`https://api.twitter.com/2/media/upload/${mediaId}/finalize`, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${account.access_token}`,
-            },
-          });
-
-          if (!finalizeResponse.ok) {
-            const error = await finalizeResponse.text();
-            return new Response(
-              JSON.stringify({ error: "Failed to finalize media upload", details: error, status_code: finalizeResponse.status }),
-              {
-                status: 400,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
-            );
-          }
-
-          mediaIds.push(mediaId);
+          const uploadData = await uploadResponse.json();
+          mediaIds.push(uploadData.media_id_string);
         }
       }
 
