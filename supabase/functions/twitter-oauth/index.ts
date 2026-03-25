@@ -1,4 +1,59 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { hmac } from "https://deno.land/x/hmac@v2.0.1/mod.ts";
+
+// OAuth 1.0a credentials for v1.1 media upload
+const OAUTH_CONSUMER_KEY = Deno.env.get("TWITTER_CONSUMER_KEY") || "";
+const OAUTH_CONSUMER_SECRET = Deno.env.get("TWITTER_CONSUMER_SECRET") || "";
+
+/**
+ * Generate OAuth 1.0a Authorization header for Twitter v1.1 API
+ * For media uploads with multipart form data, body params are NOT included in the signature.
+ */
+function generateOAuth1Header(
+  method: string,
+  url: string,
+  consumerKey: string,
+  consumerSecret: string,
+  tokenSecret: string = "",
+  token: string = "",
+): string {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = crypto.randomUUID().replace(/-/g, "");
+
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: nonce,
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: timestamp,
+    oauth_version: "1.0",
+  };
+
+  if (token) {
+    oauthParams.oauth_token = token;
+  }
+
+  // Build signature base string (no body params for multipart requests)
+  const paramString = Object.keys(oauthParams)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(oauthParams[k])}`)
+    .join("&");
+
+  const baseString = `${method.toUpperCase()}&${encodeURIComponent(url)}&${encodeURIComponent(paramString)}`;
+  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
+
+  // HMAC-SHA1 signature
+  const signatureBytes = hmac("sha1", signingKey, baseString);
+  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBytes as ArrayBuffer)));
+
+  oauthParams.oauth_signature = signature;
+
+  const headerString = Object.keys(oauthParams)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}="${encodeURIComponent(oauthParams[k])}"`)
+    .join(", ");
+
+  return `OAuth ${headerString}`;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -300,7 +355,7 @@ Deno.serve(async (req: Request) => {
 
       if (mediaFiles.length > 0) {
         for (const file of mediaFiles) {
-          // Use v1.1 upload endpoint with simple POST (works with OAuth 2.0)
+          // Use v1.1 upload endpoint with OAuth 1.0a signing
           const arrayBuffer = await file.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
           // Convert to base64 in chunks to avoid stack overflow on large files
@@ -315,10 +370,18 @@ Deno.serve(async (req: Request) => {
           const uploadFormData = new FormData();
           uploadFormData.append("media_data", base64Data);
 
-          const uploadResponse = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+          const mediaUploadUrl = "https://upload.twitter.com/1.1/media/upload.json";
+          const oauth1Header = generateOAuth1Header(
+            "POST",
+            mediaUploadUrl,
+            OAUTH_CONSUMER_KEY,
+            OAUTH_CONSUMER_SECRET,
+          );
+
+          const uploadResponse = await fetch(mediaUploadUrl, {
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${account.access_token}`,
+              "Authorization": oauth1Header,
             },
             body: uploadFormData,
           });
