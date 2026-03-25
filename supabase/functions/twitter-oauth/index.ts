@@ -300,30 +300,24 @@ Deno.serve(async (req: Request) => {
 
       if (mediaFiles.length > 0) {
         for (const file of mediaFiles) {
-          const arrayBuffer = await file.arrayBuffer();
-          const uint8Array = new Uint8Array(arrayBuffer);
-
-          // Convert binary to base64 in chunks to avoid stack overflow
-          let binaryString = "";
-          const chunkSize = 8192;
-          for (let i = 0; i < uint8Array.length; i += chunkSize) {
-            const chunk = uint8Array.subarray(i, i + chunkSize);
-            binaryString += String.fromCharCode(...chunk);
-          }
-          const base64Data = btoa(binaryString);
-          const uploadResponse = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+          // Step 1: Initialize upload via v2 media endpoint
+          const initResponse = await fetch("https://api.twitter.com/2/media/upload/initialize", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${account.access_token}`,
-              "Content-Type": "application/x-www-form-urlencoded",
+              "Content-Type": "application/json",
             },
-            body: `media_data=${encodeURIComponent(base64Data)}`,
+            body: JSON.stringify({
+              media_type: file.type || "image/png",
+              total_bytes: file.size,
+              media_category: "tweet_image",
+            }),
           });
 
-          if (!uploadResponse.ok) {
-            const error = await uploadResponse.text();
+          if (!initResponse.ok) {
+            const error = await initResponse.text();
             return new Response(
-              JSON.stringify({ error: "Failed to upload media", details: error, status_code: uploadResponse.status, status_text: uploadResponse.statusText }),
+              JSON.stringify({ error: "Failed to initialize media upload", details: error, status_code: initResponse.status }),
               {
                 status: 400,
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -331,8 +325,53 @@ Deno.serve(async (req: Request) => {
             );
           }
 
-          const uploadData = await uploadResponse.json();
-          mediaIds.push(uploadData.media_id_string);
+          const initData = await initResponse.json();
+          const mediaId = initData.id || initData.media_id_string;
+
+          // Step 2: Append the file data
+          const arrayBuffer = await file.arrayBuffer();
+          const appendFormData = new FormData();
+          appendFormData.append("media_data", new Blob([arrayBuffer], { type: file.type || "image/png" }), file.name);
+
+          const appendResponse = await fetch(`https://api.twitter.com/2/media/upload/${mediaId}/append`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${account.access_token}`,
+            },
+            body: appendFormData,
+          });
+
+          if (!appendResponse.ok) {
+            const error = await appendResponse.text();
+            return new Response(
+              JSON.stringify({ error: "Failed to append media data", details: error, status_code: appendResponse.status }),
+              {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
+
+          // Step 3: Finalize the upload
+          const finalizeResponse = await fetch(`https://api.twitter.com/2/media/upload/${mediaId}/finalize`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${account.access_token}`,
+            },
+          });
+
+          if (!finalizeResponse.ok) {
+            const error = await finalizeResponse.text();
+            return new Response(
+              JSON.stringify({ error: "Failed to finalize media upload", details: error, status_code: finalizeResponse.status }),
+              {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
+
+          mediaIds.push(mediaId);
         }
       }
 
