@@ -392,10 +392,13 @@
         });
 
         const data = await response.json();
+        console.log('OAuth 1.0a response:', data);
+
         if (data.authorization_url) {
           window.location.href = data.authorization_url;
         } else {
-          alert('Failed to initiate OAuth 1.0a authorization for media posting');
+          console.error('Authorization failed:', data);
+          alert(`Failed to initiate OAuth 1.0a authorization: ${data.error || 'Unknown error'}\n\nDetails: ${JSON.stringify(data, null, 2)}`);
         }
       } catch (error) {
         console.error('Error:', error);
