@@ -382,6 +382,16 @@
       }
 
       try {
+        // Clean up old OAuth states for this company
+        await fetch(`${SUPABASE_URL}/rest/v1/oauth_states?company_id=eq.${companyId}&platform=eq.twitter`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        // Delete the Twitter account
         const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/twitter_accounts?company_id=eq.${companyId}`, {
           method: 'DELETE',
           headers: {
@@ -394,6 +404,10 @@
           throw new Error('Failed to disconnect Twitter account');
         }
 
+        // Wait a moment for deletions to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Initiate new authorization
         const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize?company_id=${companyId}`, {
           headers: {
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
