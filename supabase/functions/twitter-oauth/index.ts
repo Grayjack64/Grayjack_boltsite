@@ -284,7 +284,11 @@ Deno.serve(async (req: Request) => {
 
       const rtResponse = await fetch(requestTokenUrl, {
         method: "POST",
-        headers: { "Authorization": oauth1Header },
+        headers: {
+          "Authorization": oauth1Header,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ oauth_callback: callbackUrl }),
       });
 
       if (!rtResponse.ok) {
