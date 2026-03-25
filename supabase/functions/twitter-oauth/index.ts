@@ -429,10 +429,25 @@ Deno.serve(async (req: Request) => {
         tweetBody.media = { media_ids: mediaIds };
       }
 
+      // If media is attached, use OAuth 1.0a for the tweet too (same auth context as media upload)
+      let tweetAuthHeader: string;
+      if (mediaIds.length > 0) {
+        tweetAuthHeader = await generateOAuth1Header(
+          "POST",
+          "https://api.twitter.com/2/tweets",
+          OAUTH_CONSUMER_KEY,
+          OAUTH_CONSUMER_SECRET,
+          OAUTH_ACCESS_TOKEN_SECRET,
+          OAUTH_ACCESS_TOKEN,
+        );
+      } else {
+        tweetAuthHeader = `Bearer ${account.access_token}`;
+      }
+
       const postResponse = await fetch("https://api.twitter.com/2/tweets", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${account.access_token}`,
+          "Authorization": tweetAuthHeader,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(tweetBody),
