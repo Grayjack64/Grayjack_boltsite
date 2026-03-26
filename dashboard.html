@@ -302,7 +302,7 @@
 
     const loadCompanies = async () => {
       try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies?select=*,twitter_accounts(*)`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies?select=*,twitter_accounts(*),meta_accounts(*)`, {
           headers: {
             'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -332,17 +332,23 @@
 
           // Check if twitter_accounts exists (could be object or null)
           const hasTwitter = company.twitter_accounts && company.twitter_accounts.username;
+          const hasMeta = company.meta_accounts && company.meta_accounts.facebook_page_id;
 
           item.innerHTML = `
             <div>
               <div class="company-name">${company.name}</div>
-              ${hasTwitter ? `<small style="color: #718096;">@${company.twitter_accounts.username}</small>` : ''}
+              ${hasTwitter ? `<small style="color: #718096;">Twitter: @${company.twitter_accounts.username}</small>` : ''}
+              ${hasMeta ? `<br><small style="color: #718096;">FB: ${company.meta_accounts.facebook_page_name || 'Connected'}${company.meta_accounts.instagram_username ? ` | IG: @${company.meta_accounts.instagram_username}` : ''}</small>` : ''}
             </div>
-            <div style="display: flex; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <span class="status ${hasTwitter ? 'connected' : 'disconnected'}">
-                ${hasTwitter ? '✓ Connected' : 'Not Connected'}
+                ${hasTwitter ? '✓ Twitter' : 'Twitter'}
               </span>
               ${!hasTwitter ? `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>` : ''}
+              <span class="status ${hasMeta ? 'connected' : 'disconnected'}">
+                ${hasMeta ? '✓ Meta' : 'Meta'}
+              </span>
+              ${!hasMeta ? `<button class="connect-btn" style="background: #1877F2;" onclick="connectMeta('${company.id}')">Connect FB/IG</button>` : ''}
             </div>
           `;
           list.appendChild(item);
@@ -371,6 +377,27 @@
       } catch (error) {
         console.error('Error:', error);
         alert('Failed to connect to Twitter');
+      }
+    };
+
+    window.connectMeta = async (companyId) => {
+      try {
+        const origin = window.location.origin;
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth/authorize?company_id=${companyId}&origin=${encodeURIComponent(origin)}`, {
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        const data = await response.json();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
+        } else {
+          alert('Failed to initiate Meta authorization: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to connect to Facebook/Instagram');
       }
     };
 
