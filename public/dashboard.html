@@ -302,7 +302,7 @@
 
     const loadCompanies = async () => {
       try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies?select=*,twitter_accounts(*)`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/companies?select=*,twitter_accounts(*),meta_accounts(*)`, {
           headers: {
             'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -332,27 +332,23 @@
 
           // Check if twitter_accounts exists (could be object or null)
           const hasTwitter = company.twitter_accounts && company.twitter_accounts.username;
-          const hasOAuth1 = hasTwitter && company.twitter_accounts.oauth1_access_token;
+          const hasMeta = company.meta_accounts && company.meta_accounts.facebook_page_id;
 
           item.innerHTML = `
             <div>
               <div class="company-name">${company.name}</div>
-              ${hasTwitter ? `<small style="color: #718096;">@${company.twitter_accounts.username}</small>` : ''}
-              ${hasTwitter && !hasOAuth1 ? `<br><small style="color: #f59e0b;">⚠️ Media posting not enabled</small>` : ''}
-              ${hasOAuth1 ? `<br><small style="color: #48bb78;">✓ Media posting enabled</small>` : ''}
+              ${hasTwitter ? `<small style="color: #718096;">Twitter: @${company.twitter_accounts.username}</small>` : ''}
+              ${hasMeta ? `<br><small style="color: #718096;">FB: ${company.meta_accounts.facebook_page_name || 'Connected'}${company.meta_accounts.instagram_username ? ` | IG: @${company.meta_accounts.instagram_username}` : ''}</small>` : ''}
             </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
               <span class="status ${hasTwitter ? 'connected' : 'disconnected'}">
-                ${hasTwitter ? '✓ Connected' : 'Not Connected'}
+                ${hasTwitter ? '✓ Twitter' : 'Twitter'}
               </span>
-              ${hasTwitter ?
-                `<button class="connect-btn" onclick="reconnectTwitter('${company.id}')" style="background: #f59e0b;">Reconnect</button>` :
-                `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>`
-              }
-              ${hasTwitter && !hasOAuth1 ?
-                `<button class="connect-btn" onclick="addMediaPosting('${company.id}')" style="background: #10b981;">Add Media Posting</button>` :
-                ''
-              }
+              ${!hasTwitter ? `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>` : ''}
+              <span class="status ${hasMeta ? 'connected' : 'disconnected'}">
+                ${hasMeta ? '✓ Meta' : 'Meta'}
+              </span>
+              ${!hasMeta ? `<button class="connect-btn" style="background: #1877F2;" onclick="connectMeta('${company.id}')">Connect FB/IG</button>` : ''}
             </div>
           `;
           list.appendChild(item);
@@ -365,7 +361,8 @@
 
     window.connectTwitter = async (companyId) => {
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize?company_id=${companyId}`, {
+        const origin = window.location.origin;
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize?company_id=${companyId}&origin=${encodeURIComponent(origin)}`, {
           headers: {
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           }
@@ -383,62 +380,10 @@
       }
     };
 
-    window.addMediaPosting = async (companyId) => {
+    window.connectMeta = async (companyId) => {
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize-v1?company_id=${companyId}`, {
-          headers: {
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          }
-        });
-
-        const data = await response.json();
-        console.log('OAuth 1.0a response:', data);
-
-        if (data.authorization_url) {
-          window.location.href = data.authorization_url;
-        } else {
-          console.error('Authorization failed:', data);
-          alert(`Failed to initiate OAuth 1.0a authorization: ${data.error || 'Unknown error'}\n\nDetails: ${JSON.stringify(data, null, 2)}`);
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Failed to add media posting capability');
-      }
-    };
-
-    window.reconnectTwitter = async (companyId) => {
-      if (!confirm('This will disconnect your current Twitter account and reconnect with updated permissions (including media upload). Continue?')) {
-        return;
-      }
-
-      try {
-        // Clean up old OAuth states for this company
-        await fetch(`${SUPABASE_URL}/rest/v1/oauth_states?company_id=eq.${companyId}&platform=eq.twitter`, {
-          method: 'DELETE',
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          }
-        });
-
-        // Delete the Twitter account
-        const deleteResponse = await fetch(`${SUPABASE_URL}/rest/v1/twitter_accounts?company_id=eq.${companyId}`, {
-          method: 'DELETE',
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          }
-        });
-
-        if (!deleteResponse.ok) {
-          throw new Error('Failed to disconnect Twitter account');
-        }
-
-        // Wait a moment for deletions to complete
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Initiate new authorization
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize?company_id=${companyId}`, {
+        const origin = window.location.origin;
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth/authorize?company_id=${companyId}&origin=${encodeURIComponent(origin)}`, {
           headers: {
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           }
@@ -448,11 +393,11 @@
         if (data.authorization_url) {
           window.location.href = data.authorization_url;
         } else {
-          alert('Failed to initiate Twitter authorization');
+          alert('Failed to initiate Meta authorization: ' + (data.error || 'Unknown error'));
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('Failed to reconnect Twitter account');
+        alert('Failed to connect to Facebook/Instagram');
       }
     };
 
