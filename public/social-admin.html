@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Admin - Grayjack Holdings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .topbar { background: #1e293b; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+    .topbar h1 { font-size: 1.2rem; color: #f1f5f9; }
+    .topbar nav { display: flex; gap: 1.5rem; align-items: center; }
+    .topbar a { color: #94a3b8; text-decoration: none; font-size: 0.9rem; padding: 0.4rem 0.8rem; border-radius: 6px; transition: all 0.2s; }
+    .topbar a:hover, .topbar a.active { color: #f1f5f9; background: #334155; }
+    .topbar button { background: #475569; border: none; color: #e2e8f0; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+    .tab { padding: 0.5rem 1.2rem; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.9rem; color: #94a3b8; transition: all 0.2s; border: none; background: none; }
+    .tab:hover { color: #e2e8f0; }
+    .tab.active { color: #3b82f6; border-bottom: 2px solid #3b82f6; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Cards */
+    .card { background: #1e293b; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; border: 1px solid #334155; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .card-title { font-size: 1rem; font-weight: 600; }
+
+    /* Stats row */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: #1e293b; border-radius: 12px; padding: 1.25rem; border: 1px solid #334155; }
+    .stat-label { color: #64748b; font-size: 0.8rem; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-value { font-size: 1.8rem; font-weight: 700; color: #f1f5f9; }
+    .stat-change { font-size: 0.8rem; margin-top: 0.25rem; }
+    .stat-change.up { color: #22c55e; }
+    .stat-change.down { color: #ef4444; }
+
+    /* Filters */
+    .filters { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .filter-btn { padding: 0.4rem 0.8rem; border-radius: 20px; border: 1px solid #475569; background: transparent; color: #94a3b8; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+    .filter-btn:hover, .filter-btn.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+
+    /* Message list */
+    .message-item { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; transition: border-color 0.2s; }
+    .message-item:hover { border-color: #475569; }
+    .message-meta { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.5rem; font-size: 0.8rem; }
+    .platform-badge { padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+    .platform-badge.twitter { background: #1d9bf0; color: white; }
+    .platform-badge.facebook { background: #1877f2; color: white; }
+    .platform-badge.instagram { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color: white; }
+    .category-badge { padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
+    .category-badge.spam { background: #451a1a; color: #fca5a5; }
+    .category-badge.compliment { background: #14532d; color: #86efac; }
+    .category-badge.complaint { background: #451a1a; color: #fca5a5; }
+    .category-badge.question_skincare, .category-badge.question_app { background: #1e3a5f; color: #93c5fd; }
+    .category-badge.irrelevant { background: #1e293b; color: #64748b; }
+    .sentiment-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .sentiment-dot.positive { background: #22c55e; }
+    .sentiment-dot.neutral { background: #f59e0b; }
+    .sentiment-dot.negative { background: #ef4444; }
+    .message-content { color: #cbd5e1; font-size: 0.9rem; line-height: 1.5; }
+    .message-author { color: #64748b; font-size: 0.8rem; }
+
+    /* Response queue */
+    .response-draft { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 1rem; margin-top: 0.75rem; }
+    .response-draft textarea { width: 100%; background: #1e293b; border: 1px solid #475569; border-radius: 6px; color: #e2e8f0; padding: 0.75rem; font-size: 0.9rem; resize: vertical; min-height: 80px; font-family: inherit; }
+    .response-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .btn { padding: 0.4rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; }
+    .btn-approve { background: #22c55e; color: white; }
+    .btn-approve:hover { background: #16a34a; }
+    .btn-reject { background: #475569; color: #e2e8f0; }
+    .btn-reject:hover { background: #64748b; }
+    .btn-send { background: #3b82f6; color: white; }
+    .btn-send:hover { background: #2563eb; }
+
+    /* Metrics table */
+    .metrics-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .metrics-table th { text-align: left; padding: 0.75rem; color: #64748b; border-bottom: 1px solid #334155; font-weight: 500; }
+    .metrics-table td { padding: 0.75rem; border-bottom: 1px solid #1e293b; }
+    .metrics-table tr:hover td { background: #1e293b; }
+    .boost-badge { background: #7c3aed; color: white; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
+    .boost-btn { background: transparent; border: 1px solid #7c3aed; color: #a78bfa; padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
+    .boost-btn:hover { background: #7c3aed; color: white; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 3rem; color: #64748b; }
+    .spinner { width: 30px; height: 30px; border: 3px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+
+    /* Boost modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 100%; max-width: 400px; border: 1px solid #334155; }
+    .modal h3 { margin-bottom: 1rem; }
+    .modal input { width: 100%; padding: 0.6rem; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #e2e8f0; margin-bottom: 0.75rem; font-size: 0.9rem; }
+    .modal label { display: block; color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.3rem; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Social Admin</h1>
+    <nav>
+      <a href="/dashboard.html">Companies</a>
+      <a href="/social-admin.html" class="active">Social Admin</a>
+      <button onclick="logout()">Sign Out</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <!-- Stats -->
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card"><div class="stat-label">Pending Responses</div><div class="stat-value" id="statPending">-</div></div>
+      <div class="stat-card"><div class="stat-label">Messages Today</div><div class="stat-value" id="statToday">-</div></div>
+      <div class="stat-card"><div class="stat-label">Spam Blocked</div><div class="stat-value" id="statSpam">-</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Engagement</div><div class="stat-value" id="statEngagement">-</div></div>
+      <div class="stat-card"><div class="stat-label">Total Posts</div><div class="stat-value" id="statPosts">-</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('inbox')">Inbox</button>
+      <button class="tab" onclick="switchTab('queue')">Response Queue</button>
+      <button class="tab" onclick="switchTab('metrics')">Post Metrics</button>
+    </div>
+
+    <!-- Inbox Tab -->
+    <div id="tab-inbox" class="tab-content active">
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterMessages('all')">All</button>
+        <button class="filter-btn" onclick="filterMessages('twitter')">Twitter</button>
+        <button class="filter-btn" onclick="filterMessages('facebook')">Facebook</button>
+        <button class="filter-btn" onclick="filterMessages('instagram')">Instagram</button>
+        <button class="filter-btn" onclick="filterMessages('spam')">Spam</button>
+        <button class="filter-btn" onclick="filterMessages('needs_response')">Needs Response</button>
+      </div>
+      <div id="messagesList" class="loading"><div class="spinner"></div>Loading messages...</div>
+    </div>
+
+    <!-- Response Queue Tab -->
+    <div id="tab-queue" class="tab-content">
+      <div id="responseQueue" class="loading"><div class="spinner"></div>Loading queue...</div>
+    </div>
+
+    <!-- Metrics Tab -->
+    <div id="tab-metrics" class="tab-content">
+      <div class="filters">
+        <button class="filter-btn active" onclick="filterMetrics('all')">All Platforms</button>
+        <button class="filter-btn" onclick="filterMetrics('twitter')">Twitter</button>
+        <button class="filter-btn" onclick="filterMetrics('facebook')">Facebook</button>
+        <button class="filter-btn" onclick="filterMetrics('instagram')">Instagram</button>
+        <button class="filter-btn" onclick="filterMetrics('boosted')">Boosted Only</button>
+      </div>
+      <div id="metricsTable" class="loading"><div class="spinner"></div>Loading metrics...</div>
+    </div>
+  </div>
+
+  <!-- Boost Modal -->
+  <div class="modal-overlay" id="boostModal">
+    <div class="modal">
+      <h3>Mark as Boosted</h3>
+      <input type="hidden" id="boostPostId">
+      <label>Spend ($)</label>
+      <input type="number" id="boostSpend" placeholder="e.g. 25.00" step="0.01">
+      <label>Start Date</label>
+      <input type="date" id="boostStart">
+      <label>End Date</label>
+      <input type="date" id="boostEnd">
+      <div class="response-actions">
+        <button class="btn btn-approve" onclick="saveBoost()">Save</button>
+        <button class="btn btn-reject" onclick="closeBoostModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/auth-guard.js"></script>
+  <script>
+    const SUPABASE_URL = 'https://edkisozjywgkgqczglbm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVka2lzb3pqeXdna2dxY3pnbGJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODA1NDEsImV4cCI6MjA4OTg1NjU0MX0.zp0aytJNgaKKndLeUgqkMw6aikSc-5FHvRsbjf9CWt8';
+
+    let sb;
+    let currentMessageFilter = 'all';
+    let currentMetricsFilter = 'all';
+
+    window.addEventListener('authReady', () => {
+      sb = window.__supabaseClient;
+      loadStats();
+      loadMessages();
+      loadQueue();
+      loadMetrics();
+      // Auto-refresh every 60 seconds
+      setInterval(() => { loadStats(); loadMessages(); loadQueue(); }, 60000);
+      setInterval(loadMetrics, 180000);
+    });
+
+    // ===== Tabs =====
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+      document.getElementById(`tab-${tab}`).classList.add('active');
+    }
+
+    // ===== Stats =====
+    async function loadStats() {
+      const { count: pending } = await sb.from('social_responses').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+      document.getElementById('statPending').textContent = pending || 0;
+
+      const today = new Date(); today.setHours(0,0,0,0);
+      const { count: todayCount } = await sb.from('social_messages').select('id', { count: 'exact', head: true }).gte('received_at', today.toISOString());
+      document.getElementById('statToday').textContent = todayCount || 0;
+
+      const { count: spam } = await sb.from('social_messages').select('id', { count: 'exact', head: true }).eq('is_spam', true);
+      document.getElementById('statSpam').textContent = spam || 0;
+
+      const { data: metrics } = await sb.from('post_metrics').select('engagement_rate').gt('engagement_rate', 0);
+      if (metrics && metrics.length > 0) {
+        const avg = (metrics.reduce((s, m) => s + parseFloat(m.engagement_rate), 0) / metrics.length).toFixed(1);
+        document.getElementById('statEngagement').textContent = avg + '%';
+      } else {
+        document.getElementById('statEngagement').textContent = '—';
+      }
+
+      const { count: posts } = await sb.from('post_metrics').select('id', { count: 'exact', head: true });
+      document.getElementById('statPosts').textContent = posts || 0;
+    }
+
+    // ===== Messages =====
+    window.filterMessages = function(filter) {
+      currentMessageFilter = filter;
+      document.querySelectorAll('#tab-inbox .filter-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      loadMessages();
+    };
+
+    async function loadMessages() {
+      const container = document.getElementById('messagesList');
+      let query = sb.from('social_messages').select('*').order('received_at', { ascending: false }).limit(100);
+
+      if (currentMessageFilter === 'spam') query = query.eq('is_spam', true);
+      else if (currentMessageFilter === 'needs_response') query = query.eq('needs_response', true).eq('response_status', 'pending');
+      else if (['twitter','facebook','instagram'].includes(currentMessageFilter)) query = query.eq('platform', currentMessageFilter);
+
+      const { data, error } = await query;
+      if (error) { container.innerHTML = '<p style="color:#f87171">Error loading messages</p>'; return; }
+      if (!data || data.length === 0) { container.innerHTML = '<div class="empty-state">No messages yet. The monitor will collect them automatically.</div>'; return; }
+
+      container.innerHTML = data.map(m => `
+        <div class="message-item">
+          <div class="message-meta">
+            <span class="platform-badge ${m.platform}">${m.platform}</span>
+            <span class="category-badge ${m.category}">${m.category.replace('_', ' ')}</span>
+            <span class="sentiment-dot ${m.sentiment}" title="${m.sentiment}"></span>
+            <span class="message-author">@${m.author_username || 'unknown'}</span>
+            <span style="color:#475569">${timeAgo(m.received_at)}</span>
+            ${m.is_spam ? '<span style="color:#fca5a5;font-size:0.75rem">SPAM</span>' : ''}
+          </div>
+          <div class="message-content">${escapeHtml(m.content)}</div>
+        </div>
+      `).join('');
+    }
+
+    // ===== Response Queue =====
+    async function loadQueue() {
+      const container = document.getElementById('responseQueue');
+      const { data, error } = await sb.from('social_responses')
+        .select('*, social_messages(*)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) { container.innerHTML = '<p style="color:#f87171">Error loading queue</p>'; return; }
+      if (!data || data.length === 0) { container.innerHTML = '<div class="empty-state">No pending responses. All caught up!</div>'; return; }
+
+      container.innerHTML = data.map(r => {
+        const m = r.social_messages;
+        return `
+        <div class="message-item">
+          <div class="message-meta">
+            <span class="platform-badge ${r.platform}">${r.platform}</span>
+            <span class="message-author">@${m?.author_username || 'unknown'}</span>
+            <span style="color:#475569">${timeAgo(m?.received_at)}</span>
+          </div>
+          <div class="message-content" style="margin-bottom:0.5rem">${escapeHtml(m?.content || '')}</div>
+          <div class="response-draft">
+            <textarea id="draft-${r.id}">${escapeHtml(r.draft_text)}</textarea>
+            <div class="response-actions">
+              <button class="btn btn-approve" onclick="approveResponse('${r.id}')">Approve & Send</button>
+              <button class="btn btn-reject" onclick="rejectResponse('${r.id}')">Reject</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    window.approveResponse = async function(id) {
+      const editedText = document.getElementById(`draft-${id}`).value;
+      const user = window.__authUser;
+      await sb.from('social_responses').update({
+        edited_text: editedText,
+        status: 'approved',
+        approved_by: user?.user_metadata?.username || user?.email,
+        approved_at: new Date().toISOString(),
+      }).eq('id', id);
+      loadQueue();
+      loadStats();
+    };
+
+    window.rejectResponse = async function(id) {
+      await sb.from('social_responses').update({ status: 'rejected' }).eq('id', id);
+      // Also mark message as skipped
+      const { data: resp } = await sb.from('social_responses').select('message_id').eq('id', id).single();
+      if (resp) await sb.from('social_messages').update({ response_status: 'skipped' }).eq('id', resp.message_id);
+      loadQueue();
+      loadStats();
+    };
+
+    // ===== Metrics =====
+    window.filterMetrics = function(filter) {
+      currentMetricsFilter = filter;
+      document.querySelectorAll('#tab-metrics .filter-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      loadMetrics();
+    };
+
+    async function loadMetrics() {
+      const container = document.getElementById('metricsTable');
+      let query = sb.from('post_metrics').select('*').order('posted_at', { ascending: false }).limit(50);
+
+      if (currentMetricsFilter === 'boosted') query = query.eq('is_boosted', true);
+      else if (['twitter','facebook','instagram'].includes(currentMetricsFilter)) query = query.eq('platform', currentMetricsFilter);
+
+      const { data, error } = await query;
+      if (error) { container.innerHTML = '<p style="color:#f87171">Error loading metrics</p>'; return; }
+      if (!data || data.length === 0) { container.innerHTML = '<div class="empty-state">No metrics yet. They\'ll appear after the monitor pulls data.</div>'; return; }
+
+      container.innerHTML = `
+        <table class="metrics-table">
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>Preview</th>
+              <th>Likes</th>
+              <th>Comments</th>
+              <th>Shares</th>
+              <th>Impressions</th>
+              <th>Engagement</th>
+              <th>Boost</th>
+              <th>Posted</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map(m => `
+              <tr>
+                <td><span class="platform-badge ${m.platform}">${m.platform}</span></td>
+                <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(m.content_preview || '')}">${escapeHtml((m.content_preview || '').substring(0, 60))}</td>
+                <td>${fmt(m.likes)}</td>
+                <td>${fmt(m.comments)}</td>
+                <td>${fmt(m.shares)}</td>
+                <td>${fmt(m.impressions)}</td>
+                <td>${m.engagement_rate > 0 ? m.engagement_rate + '%' : '—'}</td>
+                <td>${m.is_boosted
+                  ? `<span class="boost-badge">$${m.boost_spend}</span>`
+                  : `<button class="boost-btn" onclick="openBoostModal('${m.id}')">Mark Boosted</button>`
+                }</td>
+                <td style="color:#64748b;font-size:0.8rem">${m.posted_at ? new Date(m.posted_at).toLocaleDateString() : '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    // ===== Boost Modal =====
+    window.openBoostModal = function(postId) {
+      document.getElementById('boostPostId').value = postId;
+      document.getElementById('boostSpend').value = '';
+      document.getElementById('boostStart').value = new Date().toISOString().split('T')[0];
+      document.getElementById('boostEnd').value = '';
+      document.getElementById('boostModal').classList.add('active');
+    };
+
+    window.closeBoostModal = function() {
+      document.getElementById('boostModal').classList.remove('active');
+    };
+
+    window.saveBoost = async function() {
+      const id = document.getElementById('boostPostId').value;
+      const spend = parseFloat(document.getElementById('boostSpend').value) || 0;
+      const start = document.getElementById('boostStart').value;
+      const end = document.getElementById('boostEnd').value;
+
+      await sb.from('post_metrics').update({
+        is_boosted: true,
+        boost_spend: spend,
+        boost_start_date: start ? new Date(start).toISOString() : null,
+        boost_end_date: end ? new Date(end).toISOString() : null,
+      }).eq('id', id);
+
+      closeBoostModal();
+      loadMetrics();
+    };
+
+    // ===== Helpers =====
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function timeAgo(dateStr) {
+      if (!dateStr) return '';
+      const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function fmt(n) { return n > 0 ? n.toLocaleString() : '—'; }
+  </script>
+</body>
+</html>
