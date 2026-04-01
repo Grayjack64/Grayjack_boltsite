@@ -106,7 +106,7 @@
                             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ selection_key: data.selection_key, page_id: pageId })
+                        body: JSON.stringify({ company_id: data.company_id, page_id: pageId })
                     });
                     const result = await res.json();
                     if (result.success) {

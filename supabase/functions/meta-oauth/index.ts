@@ -174,26 +174,24 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "No Facebook Pages found for this account" }, 400);
       }
 
-      // If multiple pages and no selection made, store token and return list
+      // If multiple pages and no selection made, store user token and return list
       if (pages.length > 1 && !selectedPageId) {
-        // Store the user token temporarily so we can use it when the user picks a page
-        const selectionKey = "sel_" + Math.random().toString(36).substring(2, 12);
-        const selExpires = new Date();
-        selExpires.setMinutes(selExpires.getMinutes() + 10);
-
-        await supabase.from("oauth_states").insert({
+        // Store the user token on the company so /select-page can use it
+        await supabase.from("meta_accounts").upsert({
           company_id: companyId,
-          state: selectionKey,
-          code_verifier: longLivedUserToken, // store user token here temporarily
-          redirect_uri: "",
-          platform: "meta_selection",
-          expires_at: selExpires.toISOString(),
-        });
+          facebook_page_id: "_pending_selection",
+          facebook_page_name: null,
+          instagram_business_account_id: null,
+          instagram_username: null,
+          page_access_token: "",
+          user_access_token: longLivedUserToken,
+          is_active: false,
+        }, { onConflict: "company_id" });
 
         return jsonResponse({
           needs_page_selection: true,
           pages: pages.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })),
-          selection_key: selectionKey,
+          company_id: companyId,
         });
       }
 
@@ -232,7 +230,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Step 5: Store in database
+      // Step 5: Store in database (include user token for multi-page access)
       const { error: upsertError } = await supabase
         .from("meta_accounts")
         .upsert({
@@ -242,6 +240,7 @@ Deno.serve(async (req: Request) => {
           instagram_business_account_id: igBusinessAccountId,
           instagram_username: igUsername,
           page_access_token: pageAccessToken,
+          user_access_token: longLivedUserToken,
           is_active: true,
         }, { onConflict: "company_id" });
 
@@ -264,34 +263,25 @@ Deno.serve(async (req: Request) => {
     // Select Page — complete connection after user picks a page
     // -----------------------------------------------------------------------
     if (path === "/select-page" && req.method === "POST") {
-      const { selection_key, page_id } = await req.json();
+      const { company_id, page_id } = await req.json();
 
-      if (!selection_key || !page_id) {
-        return jsonResponse({ error: "selection_key and page_id are required" }, 400);
+      if (!company_id || !page_id) {
+        return jsonResponse({ error: "company_id and page_id are required" }, 400);
       }
 
-      // Retrieve the stored user token
-      const { data: selState, error: selError } = await supabase
-        .from("oauth_states")
-        .select("*")
-        .eq("state", selection_key)
-        .eq("platform", "meta_selection")
+      // Retrieve the stored user token from meta_accounts
+      const { data: pendingAccount, error: pendingError } = await supabase
+        .from("meta_accounts")
+        .select("user_access_token")
+        .eq("company_id", company_id)
         .maybeSingle();
 
-      if (selError || !selState) {
-        return jsonResponse({ error: "Invalid or expired selection key" }, 400);
+      if (pendingError || !pendingAccount?.user_access_token) {
+        return jsonResponse({ error: "No pending page selection found. Please reconnect." }, 400);
       }
 
-      if (new Date(selState.expires_at) < new Date()) {
-        await supabase.from("oauth_states").delete().eq("state", selection_key);
-        return jsonResponse({ error: "Selection expired. Please reconnect." }, 400);
-      }
-
-      const userToken = selState.code_verifier; // stored here during callback
-      const companyId = selState.company_id;
-
-      // Clean up
-      await supabase.from("oauth_states").delete().eq("state", selection_key);
+      const userToken = pendingAccount.user_access_token;
+      const companyId = company_id;
 
       // Get the page's access token from the user token
       const pagesRes = await fetch(
@@ -333,7 +323,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Save
+      // Save (keep user token for future multi-page access)
       const { error: upsertError } = await supabase
         .from("meta_accounts")
         .upsert({
@@ -343,6 +333,7 @@ Deno.serve(async (req: Request) => {
           instagram_business_account_id: igBusinessAccountId,
           instagram_username: igUsername,
           page_access_token: pageAccessToken,
+          user_access_token: userToken,
           is_active: true,
         }, { onConflict: "company_id" });
 
