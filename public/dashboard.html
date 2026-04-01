@@ -419,14 +419,15 @@
           }
         });
 
-        if (response.ok) {
-          loadCompanies();
+        if (response.ok || response.status === 204) {
+          window.location.reload();
         } else {
-          alert('Failed to disconnect');
+          const err = await response.text();
+          alert('Failed to disconnect: ' + err);
         }
       } catch (error) {
         console.error('Error:', error);
-        alert('Failed to disconnect');
+        alert('Failed to disconnect: ' + error.message);
       }
     };
 
