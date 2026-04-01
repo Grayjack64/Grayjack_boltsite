@@ -84,7 +84,8 @@ Deno.serve(async (req: Request) => {
         + `&redirect_uri=${encodeURIComponent(redirectUri)}`
         + `&scope=${scopes}`
         + `&state=${state}`
-        + `&response_type=code`;
+        + `&response_type=code`
+        + `&auth_type=rerequest`;
 
       return jsonResponse({ authorization_url: authUrl });
     }
