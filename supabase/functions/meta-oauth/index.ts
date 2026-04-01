@@ -173,16 +173,31 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "No Facebook Pages found for this account" }, 400);
       }
 
-      // If multiple pages and no selection made, return the list for user to pick
+      // If multiple pages and no selection made, store token and return list
       if (pages.length > 1 && !selectedPageId) {
+        // Store the user token temporarily so we can use it when the user picks a page
+        const selectionKey = "sel_" + Math.random().toString(36).substring(2, 12);
+        const selExpires = new Date();
+        selExpires.setMinutes(selExpires.getMinutes() + 10);
+
+        await supabase.from("oauth_states").insert({
+          company_id: companyId,
+          state: selectionKey,
+          code_verifier: longLivedUserToken, // store user token here temporarily
+          redirect_uri: "",
+          platform: "meta_selection",
+          expires_at: selExpires.toISOString(),
+        });
+
         return jsonResponse({
           needs_page_selection: true,
           pages: pages.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })),
-          // Pass these back so the callback page can re-submit with the selection
-          _code: code,
-          _state: state,
+          selection_key: selectionKey,
         });
       }
+
+      // If page was selected via selection_key, retrieve the user token
+      // (selectedPageId means the user picked a page from the selector)
 
       // Use selected page, or first page if only one
       const page = selectedPageId
@@ -241,6 +256,103 @@ Deno.serve(async (req: Request) => {
           id: p.id,
           name: p.name,
         })),
+      });
+    }
+
+    // -----------------------------------------------------------------------
+    // Select Page — complete connection after user picks a page
+    // -----------------------------------------------------------------------
+    if (path === "/select-page" && req.method === "POST") {
+      const { selection_key, page_id } = await req.json();
+
+      if (!selection_key || !page_id) {
+        return jsonResponse({ error: "selection_key and page_id are required" }, 400);
+      }
+
+      // Retrieve the stored user token
+      const { data: selState, error: selError } = await supabase
+        .from("oauth_states")
+        .select("*")
+        .eq("state", selection_key)
+        .eq("platform", "meta_selection")
+        .maybeSingle();
+
+      if (selError || !selState) {
+        return jsonResponse({ error: "Invalid or expired selection key" }, 400);
+      }
+
+      if (new Date(selState.expires_at) < new Date()) {
+        await supabase.from("oauth_states").delete().eq("state", selection_key);
+        return jsonResponse({ error: "Selection expired. Please reconnect." }, 400);
+      }
+
+      const userToken = selState.code_verifier; // stored here during callback
+      const companyId = selState.company_id;
+
+      // Clean up
+      await supabase.from("oauth_states").delete().eq("state", selection_key);
+
+      // Get the page's access token from the user token
+      const pagesRes = await fetch(
+        `${GRAPH_URL}/me/accounts?access_token=${userToken}`
+      );
+
+      if (!pagesRes.ok) {
+        return jsonResponse({ error: "Failed to fetch pages with stored token" }, 400);
+      }
+
+      const pagesData = await pagesRes.json();
+      const page = (pagesData.data || []).find((p: { id: string }) => p.id === page_id);
+
+      if (!page) {
+        return jsonResponse({ error: "Selected page not found" }, 400);
+      }
+
+      const pageAccessToken = page.access_token;
+
+      // Get Instagram Business Account
+      const igRes = await fetch(
+        `${GRAPH_URL}/${page_id}?fields=instagram_business_account&access_token=${pageAccessToken}`
+      );
+
+      let igBusinessAccountId: string | null = null;
+      let igUsername: string | null = null;
+
+      if (igRes.ok) {
+        const igData = await igRes.json();
+        if (igData.instagram_business_account) {
+          igBusinessAccountId = igData.instagram_business_account.id;
+          const igUserRes = await fetch(
+            `${GRAPH_URL}/${igBusinessAccountId}?fields=username&access_token=${pageAccessToken}`
+          );
+          if (igUserRes.ok) {
+            const igUserData = await igUserRes.json();
+            igUsername = igUserData.username || null;
+          }
+        }
+      }
+
+      // Save
+      const { error: upsertError } = await supabase
+        .from("meta_accounts")
+        .upsert({
+          company_id: companyId,
+          facebook_page_id: page_id,
+          facebook_page_name: page.name,
+          instagram_business_account_id: igBusinessAccountId,
+          instagram_username: igUsername,
+          page_access_token: pageAccessToken,
+          is_active: true,
+        }, { onConflict: "company_id" });
+
+      if (upsertError) {
+        return jsonResponse({ error: "Failed to save account", details: upsertError }, 500);
+      }
+
+      return jsonResponse({
+        success: true,
+        facebook_page: page.name,
+        instagram_username: igUsername || "Not linked",
       });
     }
 

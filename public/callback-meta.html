@@ -100,7 +100,15 @@
                 document.querySelector('h1').textContent = 'Connecting...';
                 document.querySelector('p').textContent = 'Setting up your page...';
                 try {
-                    const result = await submitCallback(data._code, data._state, pageId);
+                    const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth/select-page`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ selection_key: data.selection_key, page_id: pageId })
+                    });
+                    const result = await res.json();
                     if (result.success) {
                         showSuccess(result);
                     } else {
