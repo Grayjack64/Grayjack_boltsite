@@ -347,10 +347,12 @@
                 ${hasTwitter ? '✓ Twitter' : 'Twitter'}
               </span>
               ${!hasTwitter ? `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>` : ''}
+              ${hasTwitter ? `<button class="connect-btn" style="background: #e53e3e; font-size: 0.7rem; padding: 4px 8px;" onclick="disconnectAccount('${company.id}', 'twitter')">✕</button>` : ''}
               <span class="status ${hasMeta ? 'connected' : 'disconnected'}">
                 ${hasMeta ? '✓ Meta' : 'Meta'}
               </span>
               ${!hasMeta ? `<button class="connect-btn" style="background: #1877F2;" onclick="connectMeta('${company.id}')">Connect FB/IG</button>` : ''}
+              ${hasMeta ? `<button class="connect-btn" style="background: #e53e3e; font-size: 0.7rem; padding: 4px 8px;" onclick="disconnectAccount('${company.id}', 'meta')">✕</button>` : ''}
             </div>
           `;
           list.appendChild(item);
@@ -400,6 +402,31 @@
       } catch (error) {
         console.error('Error:', error);
         alert('Failed to connect to Facebook/Instagram');
+      }
+    };
+
+    window.disconnectAccount = async (companyId, platform) => {
+      const table = platform === 'twitter' ? 'twitter_accounts' : 'meta_accounts';
+      const label = platform === 'twitter' ? 'Twitter' : 'Facebook/Instagram';
+      if (!confirm(`Disconnect ${label} for this company?`)) return;
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?company_id=eq.${companyId}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+
+        if (response.ok) {
+          loadCompanies();
+        } else {
+          alert('Failed to disconnect');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to disconnect');
       }
     };
 
