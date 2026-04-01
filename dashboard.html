@@ -411,11 +411,16 @@
       if (!confirm(`Disconnect ${label} for this company?`)) return;
 
       try {
+        // Use the authenticated session token for delete (anon can't delete due to RLS)
+        const session = window.__authSession;
+        const token = session?.access_token || SUPABASE_ANON_KEY;
+
         const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?company_id=eq.${companyId}`, {
           method: 'DELETE',
           headers: {
             'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            'Authorization': `Bearer ${token}`,
+            'Prefer': 'return=minimal'
           }
         });
 
