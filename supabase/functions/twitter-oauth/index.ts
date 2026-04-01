@@ -582,6 +582,93 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // -----------------------------------------------------------------------
+    // Reply to a tweet (mention/comment)
+    // -----------------------------------------------------------------------
+    if (path === "/reply" && req.method === "POST") {
+      const { company_id, text, in_reply_to_tweet_id } = await req.json();
+
+      if (!company_id || !text || !in_reply_to_tweet_id) {
+        return jsonResponse({ error: "company_id, text, and in_reply_to_tweet_id are required" }, 400);
+      }
+
+      const { data: account, error: fetchError } = await supabase
+        .from("twitter_accounts")
+        .select("*")
+        .eq("company_id", company_id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (fetchError || !account) {
+        return jsonResponse({ error: "No active Twitter account found" }, 404);
+      }
+
+      const postResponse = await fetch("https://api.twitter.com/2/tweets", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${account.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          reply: { in_reply_to_tweet_id },
+        }),
+      });
+
+      if (!postResponse.ok) {
+        const error = await postResponse.text();
+        return jsonResponse({ error: "Failed to reply", details: error }, 400);
+      }
+
+      const postData = await postResponse.json();
+      return jsonResponse({ success: true, tweet_id: postData.data.id });
+    }
+
+    // -----------------------------------------------------------------------
+    // Send a DM reply
+    // -----------------------------------------------------------------------
+    if (path === "/dm" && req.method === "POST") {
+      const { company_id, text, conversation_id, recipient_id } = await req.json();
+
+      if (!company_id || !text || (!conversation_id && !recipient_id)) {
+        return jsonResponse({ error: "company_id, text, and conversation_id or recipient_id are required" }, 400);
+      }
+
+      const { data: account, error: fetchError } = await supabase
+        .from("twitter_accounts")
+        .select("*")
+        .eq("company_id", company_id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (fetchError || !account) {
+        return jsonResponse({ error: "No active Twitter account found" }, 404);
+      }
+
+      // If we have a conversation_id, send to that conversation
+      // If we have a recipient_id, create/continue a 1-on-1 conversation
+      const dmUrl = conversation_id
+        ? `https://api.twitter.com/2/dm_conversations/${conversation_id}/messages`
+        : `https://api.twitter.com/2/dm_conversations/with/${recipient_id}/messages`;
+
+      const dmResponse = await fetch(dmUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${account.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!dmResponse.ok) {
+        const error = await dmResponse.text();
+        return jsonResponse({ error: "Failed to send DM", details: error }, 400);
+      }
+
+      const dmData = await dmResponse.json();
+      return jsonResponse({ success: true, dm_event_id: dmData.data?.dm_event_id });
+    }
+
     return jsonResponse({ error: "Not found" }, 404);
 
   } catch (error) {

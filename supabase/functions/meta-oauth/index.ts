@@ -376,6 +376,90 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // -----------------------------------------------------------------------
+    // Reply to a Facebook comment
+    // -----------------------------------------------------------------------
+    if (path === "/reply-facebook" && req.method === "POST") {
+      const { company_id, text, comment_id } = await req.json();
+
+      if (!company_id || !text || !comment_id) {
+        return jsonResponse({ error: "company_id, text, and comment_id are required" }, 400);
+      }
+
+      const { data: account, error: fetchError } = await supabase
+        .from("meta_accounts")
+        .select("*")
+        .eq("company_id", company_id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (fetchError || !account) {
+        return jsonResponse({ error: "No active Meta account found" }, 404);
+      }
+
+      const replyRes = await fetch(
+        `${GRAPH_URL}/${comment_id}/comments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            access_token: account.page_access_token,
+          }),
+        }
+      );
+
+      if (!replyRes.ok) {
+        const err = await replyRes.text();
+        return jsonResponse({ error: "Failed to reply to Facebook comment", details: err }, 400);
+      }
+
+      const replyData = await replyRes.json();
+      return jsonResponse({ success: true, comment_id: replyData.id });
+    }
+
+    // -----------------------------------------------------------------------
+    // Reply to an Instagram comment
+    // -----------------------------------------------------------------------
+    if (path === "/reply-instagram" && req.method === "POST") {
+      const { company_id, text, comment_id, media_id } = await req.json();
+
+      if (!company_id || !text || !media_id) {
+        return jsonResponse({ error: "company_id, text, and media_id are required" }, 400);
+      }
+
+      const { data: account, error: fetchError } = await supabase
+        .from("meta_accounts")
+        .select("*")
+        .eq("company_id", company_id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (fetchError || !account) {
+        return jsonResponse({ error: "No active Meta account found" }, 404);
+      }
+
+      const replyRes = await fetch(
+        `${GRAPH_URL}/${media_id}/comments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            access_token: account.page_access_token,
+          }),
+        }
+      );
+
+      if (!replyRes.ok) {
+        const err = await replyRes.text();
+        return jsonResponse({ error: "Failed to reply to Instagram comment", details: err }, 400);
+      }
+
+      const replyData = await replyRes.json();
+      return jsonResponse({ success: true, comment_id: replyData.id });
+    }
+
     return jsonResponse({ error: "Not found" }, 404);
 
   } catch (error) {
