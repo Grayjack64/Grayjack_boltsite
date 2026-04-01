@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
     // Callback — exchange code for tokens, get Page + IG info
     // -----------------------------------------------------------------------
     if (path === "/callback" && req.method === "POST") {
-      const { code, state } = await req.json();
+      const { code, state, page_id: selectedPageId } = await req.json();
 
       if (!code || !state) {
         return jsonResponse({ error: "code and state are required" }, 400);
@@ -173,8 +173,21 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "No Facebook Pages found for this account" }, 400);
       }
 
-      // Use the first page (or could let user select)
-      const page = pages[0];
+      // If multiple pages and no selection made, return the list for user to pick
+      if (pages.length > 1 && !selectedPageId) {
+        return jsonResponse({
+          needs_page_selection: true,
+          pages: pages.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })),
+          // Pass these back so the callback page can re-submit with the selection
+          _code: code,
+          _state: state,
+        });
+      }
+
+      // Use selected page, or first page if only one
+      const page = selectedPageId
+        ? pages.find((p: { id: string }) => p.id === selectedPageId) || pages[0]
+        : pages[0];
       const pageId = page.id;
       const pageName = page.name;
       const pageAccessToken = page.access_token;

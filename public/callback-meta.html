@@ -57,34 +57,76 @@
         const error = urlParams.get('error');
         const errorReason = urlParams.get('error_reason');
 
-        if (error) {
-            document.querySelector('h1').textContent = 'Authentication Failed';
-            document.querySelector('p').textContent = errorReason || 'There was an error connecting to Meta.';
-            document.querySelector('.spinner').style.display = 'none';
-        } else if (code && state) {
-            fetch(`${SUPABASE_URL}/functions/v1/meta-oauth/callback`, {
+        async function submitCallback(code, state, pageId) {
+            const body = { code, state };
+            if (pageId) body.page_id = pageId;
+
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth/callback`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ code, state })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.querySelector('h1').textContent = 'Success!';
-                    document.querySelector('p').textContent = `Facebook Page "${data.facebook_page}" connected.`;
-                    const details = document.querySelector('.details');
-                    if (data.instagram_username && data.instagram_username !== 'Not linked') {
-                        details.textContent = `Instagram @${data.instagram_username} linked.`;
+                body: JSON.stringify(body)
+            });
+            return response.json();
+        }
+
+        function showSuccess(data) {
+            document.querySelector('h1').textContent = 'Success!';
+            document.querySelector('p').textContent = `Facebook Page "${data.facebook_page}" connected.`;
+            const details = document.querySelector('.details');
+            if (data.instagram_username && data.instagram_username !== 'Not linked') {
+                details.textContent = `Instagram @${data.instagram_username} linked.`;
+            } else {
+                details.textContent = 'Instagram not linked to this Page.';
+            }
+            document.querySelector('.spinner').style.display = 'none';
+            setTimeout(() => { window.location.href = '/dashboard.html'; }, 3000);
+        }
+
+        function showPageSelector(data) {
+            document.querySelector('.spinner').style.display = 'none';
+            document.querySelector('h1').textContent = 'Select a Facebook Page';
+            document.querySelector('p').textContent = 'Multiple pages found. Choose which one to connect:';
+            const details = document.querySelector('.details');
+            details.innerHTML = data.pages.map(p =>
+                `<button onclick="selectPage('${p.id}')" style="display:block;width:100%;margin:8px 0;padding:12px 16px;background:#1877F2;color:white;border:none;border-radius:8px;font-size:1rem;cursor:pointer;">${p.name}</button>`
+            ).join('');
+
+            window.selectPage = async function(pageId) {
+                details.innerHTML = '';
+                document.querySelector('.spinner').style.display = 'block';
+                document.querySelector('h1').textContent = 'Connecting...';
+                document.querySelector('p').textContent = 'Setting up your page...';
+                try {
+                    const result = await submitCallback(data._code, data._state, pageId);
+                    if (result.success) {
+                        showSuccess(result);
                     } else {
-                        details.textContent = 'Instagram not linked to this Page.';
+                        document.querySelector('h1').textContent = 'Connection Failed';
+                        document.querySelector('p').textContent = result.error || 'Failed to connect.';
+                        document.querySelector('.spinner').style.display = 'none';
                     }
+                } catch (err) {
+                    document.querySelector('h1').textContent = 'Error';
+                    document.querySelector('p').textContent = 'An error occurred.';
                     document.querySelector('.spinner').style.display = 'none';
-                    setTimeout(() => {
-                        window.location.href = '/dashboard.html';
-                    }, 3000);
+                }
+            };
+        }
+
+        if (error) {
+            document.querySelector('h1').textContent = 'Authentication Failed';
+            document.querySelector('p').textContent = errorReason || 'There was an error connecting to Meta.';
+            document.querySelector('.spinner').style.display = 'none';
+        } else if (code && state) {
+            submitCallback(code, state)
+            .then(data => {
+                if (data.needs_page_selection) {
+                    showPageSelector(data);
+                } else if (data.success) {
+                    showSuccess(data);
                 } else {
                     document.querySelector('h1').textContent = 'Connection Failed';
                     document.querySelector('p').textContent = data.error || 'Failed to connect Meta account.';
