@@ -101,6 +101,7 @@
       <button class="tab" onclick="switchTab('knowledge')">Knowledge Base</button>
       <button class="tab" onclick="switchTab('media')">Media Library</button>
       <button class="tab" onclick="switchTab('events')">Events Calendar</button>
+      <button class="tab" onclick="switchTab('create')">Create Post</button>
     </div>
 
     <!-- Content Strategy Tab -->
@@ -131,6 +132,64 @@
       <div id="eventsList"></div>
     </div>
   </div>
+
+    <!-- Create Post Tab -->
+    <div id="tab-create" class="tab-content">
+      <p style="color:#94a3b8;margin-bottom:1rem;font-size:0.9rem">Create a one-off post with full control over subject, tone, media, and platforms.</p>
+      <div class="card">
+        <div class="form-grid full">
+          <div><label>What should this post be about?</label>
+          <textarea id="cp_prompt" rows="3" placeholder="e.g. Announce our new roll-on product format, emphasize the no-mess applicator, make it funny and bold..."></textarea></div>
+        </div>
+        <div class="form-grid">
+          <div><label>Tone / Persona Override (optional)</label>
+          <input id="cp_tone" placeholder="e.g. Extra sarcastic, serious/professional, hype energy"></div>
+          <div><label>Include specific text (optional)</label>
+          <input id="cp_mustinclude" placeholder="e.g. Use code SPRING20 for 20% off"></div>
+        </div>
+        <div class="form-grid">
+          <div><label>Specific media asset (optional)</label>
+          <select id="cp_media"><option value="">AI generates new image</option></select></div>
+          <div><label>Link to include (optional)</label>
+          <input id="cp_link" placeholder="https://..."></div>
+        </div>
+        <div style="margin:1rem 0">
+          <label>Post to:</label>
+          <div style="display:flex;gap:1rem;margin-top:0.5rem">
+            <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" id="cp_twitter" checked> Twitter</label>
+            <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" id="cp_facebook" checked> Facebook</label>
+            <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer"><input type="checkbox" id="cp_instagram" checked> Instagram</label>
+          </div>
+        </div>
+        <div style="margin:1rem 0">
+          <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+            <input type="checkbox" id="cp_preview" checked> Preview before posting (recommended)
+          </label>
+        </div>
+        <button class="btn btn-primary" onclick="generateOneOff()" id="cp_generate_btn" style="font-size:1rem;padding:0.75rem 2rem">Generate Post</button>
+      </div>
+
+      <!-- Preview area -->
+      <div id="cp_preview_area" style="display:none">
+        <h3 style="margin:1.5rem 0 1rem">Preview</h3>
+        <div class="card" id="cp_preview_image" style="text-align:center"></div>
+        <div class="card">
+          <label>Twitter</label>
+          <textarea id="cp_tweet_text" rows="3" style="margin-bottom:1rem"></textarea>
+          <label>Facebook</label>
+          <textarea id="cp_fb_text" rows="4" style="margin-bottom:1rem"></textarea>
+          <label>Instagram</label>
+          <textarea id="cp_ig_text" rows="5" style="margin-bottom:1rem"></textarea>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem">
+          <button class="btn btn-primary" onclick="publishOneOff()" id="cp_publish_btn" style="font-size:1rem;padding:0.75rem 2rem">Publish Now</button>
+          <button class="btn" style="background:#475569;color:#e2e8f0;font-size:1rem;padding:0.75rem 2rem" onclick="document.getElementById('cp_preview_area').style.display='none'">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Result area -->
+      <div id="cp_result" style="display:none" class="card" style="margin-top:1rem"></div>
+    </div>
 
   <!-- Generic Modal -->
   <div class="modal-overlay" id="modal">
@@ -386,6 +445,144 @@
         closeModal(); loadEvents();
       };
       openModal('Add Event');
+    };
+
+    // ===== CREATE ONE-OFF POST =====
+    // Load media assets into the selector when switching to Create tab
+    async function loadMediaForCreate() {
+      const { data } = await sb.from('company_media').select('id,title,media_url,media_type').eq('company_id', currentCompanyId).eq('active', true);
+      const sel = document.getElementById('cp_media');
+      sel.innerHTML = '<option value="">AI generates new image</option>';
+      for (const m of (data || [])) {
+        const opt = document.createElement('option');
+        opt.value = m.media_url;
+        opt.textContent = `${m.media_type}: ${m.title}`;
+        sel.appendChild(opt);
+      }
+    }
+
+    // Override switchTab to also load media for create
+    const _origSwitchTab = switchTab;
+    switchTab = function(tab) {
+      _origSwitchTab(tab);
+      if (tab === 'create') loadMediaForCreate();
+    };
+
+    let _oneOffData = null;
+
+    window.generateOneOff = async () => {
+      const btn = document.getElementById('cp_generate_btn');
+      btn.disabled = true; btn.textContent = 'Generating...';
+
+      try {
+        const mediaUrl = document.getElementById('cp_media').value;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/create-post`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            company_id: currentCompanyId,
+            prompt: document.getElementById('cp_prompt').value,
+            tone: document.getElementById('cp_tone').value || null,
+            must_include: document.getElementById('cp_mustinclude').value || null,
+            media_asset_url: mediaUrl || null,
+            link: document.getElementById('cp_link').value || null,
+            generate_image: !mediaUrl,
+          }),
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          alert('Generation failed: ' + (data.error || 'Unknown error'));
+          return;
+        }
+
+        _oneOffData = data;
+
+        // Show preview
+        const previewArea = document.getElementById('cp_preview_area');
+        previewArea.style.display = 'block';
+
+        // Image preview
+        const imgEl = document.getElementById('cp_preview_image');
+        if (data.image_url) {
+          imgEl.innerHTML = `<img src="${data.image_url}" style="max-width:400px;max-height:300px;border-radius:8px">`;
+        } else {
+          imgEl.innerHTML = '<p style="color:#64748b">No image</p>';
+        }
+
+        // Text previews (editable)
+        document.getElementById('cp_tweet_text').value = data.posts.tweet || '';
+        document.getElementById('cp_fb_text').value = data.posts.facebook || '';
+        document.getElementById('cp_ig_text').value = data.posts.instagram || '';
+
+        previewArea.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Generate Post';
+      }
+    };
+
+    window.publishOneOff = async () => {
+      if (!_oneOffData) return;
+      const btn = document.getElementById('cp_publish_btn');
+      btn.disabled = true; btn.textContent = 'Publishing...';
+
+      const results = [];
+      const imageUrl = _oneOffData.image_url;
+      const tweetText = document.getElementById('cp_tweet_text').value;
+      const fbText = document.getElementById('cp_fb_text').value;
+      const igText = document.getElementById('cp_ig_text').value;
+
+      // Twitter
+      if (document.getElementById('cp_twitter').checked && tweetText) {
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/post`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_id: currentCompanyId, text: tweetText }),
+          });
+          const data = await res.json();
+          results.push(res.ok ? `Twitter: ✓ Posted (${data.tweet_id})` : `Twitter: ✗ ${data.error}`);
+        } catch (e) { results.push(`Twitter: ✗ ${e.message}`); }
+      }
+
+      // Facebook
+      if (document.getElementById('cp_facebook').checked && fbText) {
+        try {
+          const body = { company_id: currentCompanyId, text: fbText };
+          if (imageUrl) body.image_url = imageUrl;
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth/post-facebook`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          results.push(res.ok ? `Facebook: ✓ Posted` : `Facebook: ✗ ${data.error}`);
+        } catch (e) { results.push(`Facebook: ✗ ${e.message}`); }
+      }
+
+      // Instagram
+      if (document.getElementById('cp_instagram').checked && igText && imageUrl) {
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-oauth/post-instagram`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_id: currentCompanyId, caption: igText, image_url: imageUrl }),
+          });
+          const data = await res.json();
+          results.push(res.ok ? `Instagram: ✓ Posted` : `Instagram: ✗ ${data.error}`);
+        } catch (e) { results.push(`Instagram: ✗ ${e.message}`); }
+      }
+
+      const resultEl = document.getElementById('cp_result');
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<h3 style="margin-bottom:0.5rem">Results</h3>' + results.map(r =>
+        `<p style="margin:0.3rem 0;${r.includes('✓') ? 'color:#22c55e' : 'color:#ef4444'}">${r}</p>`
+      ).join('');
+
+      btn.disabled = false; btn.textContent = 'Publish Now';
+      _oneOffData = null;
     };
   </script>
 </body>
