@@ -300,12 +300,44 @@
             <span style="color:#64748b;font-size:0.8rem;margin-left:0.5rem">Priority: ${k.priority}</span>
             <br><small style="color:#94a3b8">${(k.content || '').substring(0, 120)}${k.content?.length > 120 ? '...' : ''}</small>
           </div>
-          <button class="btn btn-danger" onclick="deleteKnowledge('${k.id}')">Delete</button>
+          <div style="display:flex;gap:0.4rem">
+            <button class="btn" style="background:#3b82f6;color:white;font-size:0.75rem;padding:0.3rem 0.6rem" onclick="editKnowledge('${k.id}')">Edit</button>
+            <button class="btn btn-danger" onclick="deleteKnowledge('${k.id}')">Delete</button>
+          </div>
         </div>
       `).join('');
     }
 
     window.deleteKnowledge = async (id) => { if (confirm('Delete?')) { await sb.from('company_knowledge').delete().eq('id', id); loadKnowledge(); } };
+
+    window.editKnowledge = async (id) => {
+      const { data: k } = await sb.from('company_knowledge').select('*').eq('id', id).single();
+      if (!k) return;
+
+      const categories = ['product','feature','faq','brand_voice','testimonial','ingredient','pricing','differentiator','target_audience','competitor_positioning'];
+      const catOptions = categories.map(c => `<option${c === k.category ? ' selected' : ''}>${c}</option>`).join('');
+
+      document.getElementById('modalBody').innerHTML = `
+        <div class="form-grid">
+          <div><label>Category</label><select id="f_k_cat">${catOptions}</select></div>
+          <div><label>Priority (1-10)</label><input id="f_k_pri" type="number" value="${k.priority}" min="1" max="10"></div>
+        </div>
+        <div class="form-grid full"><div><label>Title</label><input id="f_k_title" value="${(k.title || '').replace(/"/g, '&quot;')}"></div></div>
+        <div class="form-grid full"><div><label>Content</label><textarea id="f_k_content" rows="6">${k.content || ''}</textarea></div></div>
+        <div class="form-grid full"><div><label>Tags (comma separated)</label><input id="f_k_tags" value="${(k.tags || []).join(', ')}"></div></div>`;
+      document.getElementById('modalSave').onclick = async () => {
+        const tags = document.getElementById('f_k_tags').value.split(',').map(t => t.trim()).filter(Boolean);
+        await sb.from('company_knowledge').update({
+          category: document.getElementById('f_k_cat').value,
+          title: document.getElementById('f_k_title').value,
+          content: document.getElementById('f_k_content').value,
+          priority: parseInt(document.getElementById('f_k_pri').value),
+          tags: tags.length ? tags : null,
+        }).eq('id', id);
+        closeModal(); loadKnowledge();
+      };
+      openModal('Edit Knowledge Entry');
+    };
 
     window.showAddKnowledge = () => {
       document.getElementById('modalBody').innerHTML = `
