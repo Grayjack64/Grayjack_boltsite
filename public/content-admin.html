@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Content Manager - Grayjack Holdings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .topbar { background: #1e293b; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+    .topbar h1 { font-size: 1.2rem; color: #f1f5f9; }
+    .topbar nav { display: flex; gap: 1.5rem; align-items: center; }
+    .topbar a { color: #94a3b8; text-decoration: none; font-size: 0.9rem; padding: 0.4rem 0.8rem; border-radius: 6px; transition: all 0.2s; }
+    .topbar a:hover, .topbar a.active { color: #f1f5f9; background: #334155; }
+    .topbar button { background: #475569; border: none; color: #e2e8f0; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+    /* Company selector */
+    .company-selector { margin-bottom: 2rem; }
+    .company-selector select { background: #1e293b; color: #e2e8f0; border: 1px solid #475569; padding: 0.6rem 1rem; border-radius: 8px; font-size: 1rem; min-width: 200px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+    .tab { padding: 0.5rem 1.2rem; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.9rem; color: #94a3b8; transition: all 0.2s; border: none; background: none; }
+    .tab:hover { color: #e2e8f0; }
+    .tab.active { color: #3b82f6; border-bottom: 2px solid #3b82f6; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Cards and items */
+    .card { background: #1e293b; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; border: 1px solid #334155; }
+    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; margin-bottom: 0.5rem; }
+    .item-row:hover { border-color: #475569; }
+
+    /* Forms */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .form-grid.full { grid-template-columns: 1fr; }
+    label { display: block; color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.3rem; font-weight: 500; }
+    input, select, textarea { width: 100%; padding: 0.6rem 0.8rem; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #e2e8f0; font-size: 0.9rem; font-family: inherit; }
+    input:focus, select:focus, textarea:focus { border-color: #3b82f6; outline: none; }
+    textarea { min-height: 100px; resize: vertical; }
+
+    /* Buttons */
+    .btn { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-danger { background: #ef4444; color: white; font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-add { background: #22c55e; color: white; margin-bottom: 1rem; }
+    .btn-add:hover { background: #16a34a; }
+
+    /* Weight slider */
+    .weight-row { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; margin-bottom: 0.5rem; }
+    .weight-row .name { flex: 1; min-width: 150px; }
+    .weight-row input[type="range"] { flex: 2; accent-color: #3b82f6; }
+    .weight-row .value { width: 50px; text-align: center; font-weight: 600; color: #3b82f6; }
+    .weight-row .toggle { width: 40px; }
+    .weight-row input[type="checkbox"] { accent-color: #22c55e; width: 18px; height: 18px; }
+    .badge { padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    .badge-blog { background: #1e3a5f; color: #93c5fd; }
+    .badge-social { background: #14532d; color: #86efac; }
+
+    /* Category badges */
+    .cat-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; background: #334155; color: #94a3b8; }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 2rem; color: #64748b; }
+
+    /* Loading */
+    .spinner { width: 24px; height: 24px; border: 3px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 100%; max-width: 550px; border: 1px solid #334155; max-height: 90vh; overflow-y: auto; }
+    .modal h3 { margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Content Manager</h1>
+    <nav>
+      <a href="/dashboard.html">Companies</a>
+      <a href="/social-admin.html">Social Admin</a>
+      <a href="/content-admin.html" class="active">Content</a>
+      <button onclick="logout()">Sign Out</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <!-- Company Selector -->
+    <div class="company-selector">
+      <label>Company</label>
+      <select id="companySelect" onchange="loadAll()"></select>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('config')">Content Strategy</button>
+      <button class="tab" onclick="switchTab('knowledge')">Knowledge Base</button>
+      <button class="tab" onclick="switchTab('media')">Media Library</button>
+      <button class="tab" onclick="switchTab('events')">Events Calendar</button>
+    </div>
+
+    <!-- Content Strategy Tab -->
+    <div id="tab-config" class="tab-content active">
+      <p style="color:#94a3b8;margin-bottom:1rem;font-size:0.9rem">Adjust weights to control how often each content type is used. Higher weight = more frequent.</p>
+      <div id="configList"></div>
+      <button class="btn btn-add" onclick="showAddContentType()">+ Add Content Type</button>
+    </div>
+
+    <!-- Knowledge Base Tab -->
+    <div id="tab-knowledge" class="tab-content">
+      <p style="color:#94a3b8;margin-bottom:1rem;font-size:0.9rem">Add information about the company, products, and brand that the AI will draw on when creating content.</p>
+      <button class="btn btn-add" onclick="showAddKnowledge()">+ Add Knowledge Entry</button>
+      <div id="knowledgeList"></div>
+    </div>
+
+    <!-- Media Library Tab -->
+    <div id="tab-media" class="tab-content">
+      <p style="color:#94a3b8;margin-bottom:1rem;font-size:0.9rem">Upload graphic assets with descriptions. The AI will use these when appropriate instead of generating new images.</p>
+      <button class="btn btn-add" onclick="showAddMedia()">+ Add Media Asset</button>
+      <div id="mediaList"></div>
+    </div>
+
+    <!-- Events Calendar Tab -->
+    <div id="tab-events" class="tab-content">
+      <p style="color:#94a3b8;margin-bottom:1rem;font-size:0.9rem">Add upcoming events, sales, and announcements. The AI will weave these into posts during their promo window.</p>
+      <button class="btn btn-add" onclick="showAddEvent()">+ Add Event</button>
+      <div id="eventsList"></div>
+    </div>
+  </div>
+
+  <!-- Generic Modal -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <h3 id="modalTitle">Add</h3>
+      <div id="modalBody"></div>
+      <div style="display:flex;gap:0.5rem;margin-top:1.5rem">
+        <button class="btn btn-primary" id="modalSave">Save</button>
+        <button class="btn" style="background:#475569;color:#e2e8f0" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/auth-guard.js"></script>
+  <script>
+    const SUPABASE_URL = 'https://edkisozjywgkgqczglbm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVka2lzb3pqeXdna2dxY3pnbGJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODA1NDEsImV4cCI6MjA4OTg1NjU0MX0.zp0aytJNgaKKndLeUgqkMw6aikSc-5FHvRsbjf9CWt8';
+
+    let sb, currentCompanyId;
+
+    window.addEventListener('authReady', async () => {
+      sb = window.__supabaseClient;
+      // Load companies
+      const { data: companies } = await sb.from('companies').select('id,name').order('name');
+      const sel = document.getElementById('companySelect');
+      for (const c of companies) {
+        const opt = document.createElement('option');
+        opt.value = c.id; opt.textContent = c.name;
+        sel.appendChild(opt);
+      }
+      currentCompanyId = companies[0]?.id;
+      loadAll();
+    });
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+      document.getElementById(`tab-${tab}`).classList.add('active');
+    }
+
+    function loadAll() {
+      currentCompanyId = document.getElementById('companySelect').value;
+      loadConfig(); loadKnowledge(); loadMedia(); loadEvents();
+    }
+
+    function openModal(title) { document.getElementById('modalTitle').textContent = title; document.getElementById('modal').classList.add('active'); }
+    function closeModal() { document.getElementById('modal').classList.remove('active'); }
+
+    // ===== CONTENT STRATEGY =====
+    async function loadConfig() {
+      const { data } = await sb.from('company_content_config').select('*').eq('company_id', currentCompanyId).order('weight', { ascending: false });
+      const el = document.getElementById('configList');
+      if (!data?.length) { el.innerHTML = '<div class="empty-state">No content types configured.</div>'; return; }
+      el.innerHTML = data.map(c => `
+        <div class="weight-row">
+          <div class="toggle"><input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="toggleConfig('${c.id}', this.checked)"></div>
+          <div class="name">
+            <strong>${c.content_type.replace(/_/g, ' ')}</strong>
+            <span class="badge ${c.creates_blog ? 'badge-blog' : 'badge-social'}">${c.creates_blog ? 'Blog' : 'Social'}</span>
+            <br><small style="color:#64748b">${c.description || ''}</small>
+          </div>
+          <input type="range" min="0" max="100" value="${c.weight}" oninput="this.nextElementSibling.textContent=this.value" onchange="updateWeight('${c.id}', this.value)">
+          <div class="value">${c.weight}</div>
+          <button class="btn btn-danger" onclick="deleteConfig('${c.id}')">Delete</button>
+        </div>
+      `).join('');
+    }
+
+    window.toggleConfig = async (id, enabled) => { await sb.from('company_content_config').update({ enabled }).eq('id', id); };
+    window.updateWeight = async (id, weight) => { await sb.from('company_content_config').update({ weight: parseInt(weight) }).eq('id', id); };
+    window.deleteConfig = async (id) => { if (confirm('Delete this content type?')) { await sb.from('company_content_config').delete().eq('id', id); loadConfig(); } };
+
+    window.showAddContentType = () => {
+      document.getElementById('modalBody').innerHTML = `
+        <div class="form-grid">
+          <div><label>Content Type ID</label><input id="f_ct_type" placeholder="e.g. product_ad"></div>
+          <div><label>Weight (0-100)</label><input id="f_ct_weight" type="number" value="25"></div>
+        </div>
+        <div class="form-grid full"><div><label>Description</label><input id="f_ct_desc" placeholder="What kind of content this generates"></div></div>
+        <div class="form-grid">
+          <div><label>Creates Blog Post?</label><select id="f_ct_blog"><option value="false">No — Social only</option><option value="true">Yes — Blog article</option></select></div>
+          <div><label>Custom Prompt (optional)</label><input id="f_ct_prompt" placeholder="Override default prompt"></div>
+        </div>`;
+      document.getElementById('modalSave').onclick = async () => {
+        await sb.from('company_content_config').insert({
+          company_id: currentCompanyId, content_type: document.getElementById('f_ct_type').value,
+          weight: parseInt(document.getElementById('f_ct_weight').value), description: document.getElementById('f_ct_desc').value,
+          creates_blog: document.getElementById('f_ct_blog').value === 'true',
+          prompt_template: document.getElementById('f_ct_prompt').value || null, enabled: true,
+        });
+        closeModal(); loadConfig();
+      };
+      openModal('Add Content Type');
+    };
+
+    // ===== KNOWLEDGE BASE =====
+    async function loadKnowledge() {
+      const { data } = await sb.from('company_knowledge').select('*').eq('company_id', currentCompanyId).order('priority', { ascending: false });
+      const el = document.getElementById('knowledgeList');
+      if (!data?.length) { el.innerHTML = '<div class="empty-state">No knowledge entries yet.</div>'; return; }
+      el.innerHTML = data.map(k => `
+        <div class="item-row">
+          <div style="flex:1">
+            <span class="cat-badge">${k.category}</span>
+            <strong style="margin-left:0.5rem">${k.title}</strong>
+            <span style="color:#64748b;font-size:0.8rem;margin-left:0.5rem">Priority: ${k.priority}</span>
+            <br><small style="color:#94a3b8">${(k.content || '').substring(0, 120)}${k.content?.length > 120 ? '...' : ''}</small>
+          </div>
+          <button class="btn btn-danger" onclick="deleteKnowledge('${k.id}')">Delete</button>
+        </div>
+      `).join('');
+    }
+
+    window.deleteKnowledge = async (id) => { if (confirm('Delete?')) { await sb.from('company_knowledge').delete().eq('id', id); loadKnowledge(); } };
+
+    window.showAddKnowledge = () => {
+      document.getElementById('modalBody').innerHTML = `
+        <div class="form-grid">
+          <div><label>Category</label><select id="f_k_cat">
+            <option>product</option><option>feature</option><option>faq</option><option>brand_voice</option>
+            <option>testimonial</option><option>ingredient</option><option>pricing</option>
+            <option>differentiator</option><option>target_audience</option><option>competitor_positioning</option>
+          </select></div>
+          <div><label>Priority (1-10)</label><input id="f_k_pri" type="number" value="5" min="1" max="10"></div>
+        </div>
+        <div class="form-grid full"><div><label>Title</label><input id="f_k_title" placeholder="Short title"></div></div>
+        <div class="form-grid full"><div><label>Content</label><textarea id="f_k_content" placeholder="Detailed information the AI can use..."></textarea></div></div>
+        <div class="form-grid full"><div><label>Tags (comma separated)</label><input id="f_k_tags" placeholder="e.g. recovery, natural, athletes"></div></div>`;
+      document.getElementById('modalSave').onclick = async () => {
+        const tags = document.getElementById('f_k_tags').value.split(',').map(t => t.trim()).filter(Boolean);
+        await sb.from('company_knowledge').insert({
+          company_id: currentCompanyId, category: document.getElementById('f_k_cat').value,
+          title: document.getElementById('f_k_title').value, content: document.getElementById('f_k_content').value,
+          priority: parseInt(document.getElementById('f_k_pri').value), tags: tags.length ? tags : null,
+        });
+        closeModal(); loadKnowledge();
+      };
+      openModal('Add Knowledge Entry');
+    };
+
+    // ===== MEDIA LIBRARY =====
+    async function loadMedia() {
+      const { data } = await sb.from('company_media').select('*').eq('company_id', currentCompanyId).order('created_at', { ascending: false });
+      const el = document.getElementById('mediaList');
+      if (!data?.length) { el.innerHTML = '<div class="empty-state">No media assets yet.</div>'; return; }
+      el.innerHTML = data.map(m => `
+        <div class="item-row">
+          <div style="display:flex;align-items:center;gap:1rem;flex:1">
+            ${m.file_type?.startsWith('image') ? `<img src="${m.media_url}" style="width:60px;height:60px;object-fit:cover;border-radius:6px">` : `<div style="width:60px;height:60px;background:#334155;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#64748b">${m.media_type}</div>`}
+            <div>
+              <span class="cat-badge">${m.media_type}</span>
+              <strong style="margin-left:0.5rem">${m.title}</strong>
+              <span style="color:#64748b;font-size:0.75rem;margin-left:0.5rem">(${m.use_frequency})</span>
+              <br><small style="color:#94a3b8">${(m.description || '').substring(0, 100)}</small>
+            </div>
+          </div>
+          <button class="btn btn-danger" onclick="deleteMedia('${m.id}')">Delete</button>
+        </div>
+      `).join('');
+    }
+
+    window.deleteMedia = async (id) => { if (confirm('Delete?')) { await sb.from('company_media').delete().eq('id', id); loadMedia(); } };
+
+    window.showAddMedia = () => {
+      document.getElementById('modalBody').innerHTML = `
+        <div class="form-grid">
+          <div><label>Media Type</label><select id="f_m_type">
+            <option>logo</option><option>screenshot</option><option>product_photo</option>
+            <option>lifestyle</option><option>video</option><option>infographic</option><option>banner</option><option>icon</option>
+          </select></div>
+          <div><label>Use Frequency</label><select id="f_m_freq">
+            <option>sometimes</option><option>always</option><option>often</option><option>rarely</option>
+          </select></div>
+        </div>
+        <div class="form-grid full"><div><label>Title</label><input id="f_m_title" placeholder="e.g. Ora App Home Screen"></div></div>
+        <div class="form-grid full"><div><label>Media URL</label><input id="f_m_url" placeholder="https://..."></div></div>
+        <div class="form-grid full"><div><label>Description (for AI)</label><textarea id="f_m_desc" placeholder="Describe what this image/video shows so the AI knows when to use it..."></textarea></div></div>
+        <div class="form-grid">
+          <div><label>File Type</label><input id="f_m_filetype" placeholder="image/png" value="image/png"></div>
+          <div><label>Tags (comma separated)</label><input id="f_m_tags" placeholder="e.g. product, jar, lifestyle"></div>
+        </div>`;
+      document.getElementById('modalSave').onclick = async () => {
+        const tags = document.getElementById('f_m_tags').value.split(',').map(t => t.trim()).filter(Boolean);
+        await sb.from('company_media').insert({
+          company_id: currentCompanyId, media_type: document.getElementById('f_m_type').value,
+          title: document.getElementById('f_m_title').value, media_url: document.getElementById('f_m_url').value,
+          description: document.getElementById('f_m_desc').value, file_type: document.getElementById('f_m_filetype').value,
+          use_frequency: document.getElementById('f_m_freq').value, tags: tags.length ? tags : null,
+        });
+        closeModal(); loadMedia();
+      };
+      openModal('Add Media Asset');
+    };
+
+    // ===== EVENTS CALENDAR =====
+    async function loadEvents() {
+      const { data } = await sb.from('company_events').select('*').eq('company_id', currentCompanyId).order('start_date', { ascending: true });
+      const el = document.getElementById('eventsList');
+      if (!data?.length) { el.innerHTML = '<div class="empty-state">No events scheduled.</div>'; return; }
+      const today = new Date().toISOString().split('T')[0];
+      el.innerHTML = data.map(e => {
+        const isPast = e.end_date ? e.end_date < today : e.start_date < today;
+        const isActive = !isPast && e.active;
+        return `
+        <div class="item-row" style="${isPast ? 'opacity:0.5' : ''}">
+          <div style="flex:1">
+            <span class="cat-badge">${e.event_type}</span>
+            <strong style="margin-left:0.5rem">${e.event_name}</strong>
+            ${isActive ? '<span style="color:#22c55e;font-size:0.75rem;margin-left:0.5rem">● Active</span>' : ''}
+            <br><small style="color:#94a3b8">${e.start_date}${e.end_date ? ' → ' + e.end_date : ''} | Promo starts ${e.promo_start_days_before}d before</small>
+            <br><small style="color:#64748b">${(e.description || '').substring(0, 100)}</small>
+            ${e.hashtag ? `<br><small style="color:#3b82f6">${e.hashtag}</small>` : ''}
+          </div>
+          <button class="btn btn-danger" onclick="deleteEvent('${e.id}')">Delete</button>
+        </div>`;
+      }).join('');
+    }
+
+    window.deleteEvent = async (id) => { if (confirm('Delete?')) { await sb.from('company_events').delete().eq('id', id); loadEvents(); } };
+
+    window.showAddEvent = () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('modalBody').innerHTML = `
+        <div class="form-grid full"><div><label>Event Name</label><input id="f_e_name" placeholder="e.g. Spring Sale 20% Off"></div></div>
+        <div class="form-grid">
+          <div><label>Event Type</label><select id="f_e_type">
+            <option>sale</option><option>product_launch</option><option>announcement</option>
+            <option>holiday</option><option>partnership</option><option>milestone</option><option>seasonal</option><option>contest</option>
+          </select></div>
+          <div><label>Priority (1-10)</label><input id="f_e_pri" type="number" value="5" min="1" max="10"></div>
+        </div>
+        <div class="form-grid">
+          <div><label>Start Date</label><input id="f_e_start" type="date" value="${today}"></div>
+          <div><label>End Date (optional)</label><input id="f_e_end" type="date"></div>
+        </div>
+        <div class="form-grid">
+          <div><label>Promo starts N days before</label><input id="f_e_days" type="number" value="3"></div>
+          <div><label>Hashtag (optional)</label><input id="f_e_hash" placeholder="#SpringSale"></div>
+        </div>
+        <div class="form-grid full"><div><label>Description</label><textarea id="f_e_desc" placeholder="What the AI should know about this event..."></textarea></div></div>
+        <div class="form-grid full"><div><label>Promo Text (optional)</label><input id="f_e_promo" placeholder="e.g. Use code SPRING20 for 20% off"></div></div>`;
+      document.getElementById('modalSave').onclick = async () => {
+        await sb.from('company_events').insert({
+          company_id: currentCompanyId, event_name: document.getElementById('f_e_name').value,
+          event_type: document.getElementById('f_e_type').value, description: document.getElementById('f_e_desc').value,
+          start_date: document.getElementById('f_e_start').value, end_date: document.getElementById('f_e_end').value || null,
+          promo_start_days_before: parseInt(document.getElementById('f_e_days').value),
+          priority: parseInt(document.getElementById('f_e_pri').value),
+          hashtag: document.getElementById('f_e_hash').value || null, promo_text: document.getElementById('f_e_promo').value || null,
+        });
+        closeModal(); loadEvents();
+      };
+      openModal('Add Event');
+    };
+  </script>
+</body>
+</html>
