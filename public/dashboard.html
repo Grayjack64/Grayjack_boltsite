@@ -334,6 +334,7 @@
 
           // Check if twitter_accounts exists (could be object or null)
           const hasTwitter = company.twitter_accounts && company.twitter_accounts.username;
+          const hasOAuth1 = hasTwitter && company.twitter_accounts.oauth1_access_token;
           const hasMeta = company.meta_accounts && company.meta_accounts.facebook_page_id;
 
           item.innerHTML = `
@@ -347,6 +348,7 @@
                 ${hasTwitter ? '✓ Twitter' : 'Twitter'}
               </span>
               ${!hasTwitter ? `<button class="connect-btn" onclick="connectTwitter('${company.id}')">Connect Twitter</button>` : ''}
+              ${hasTwitter && !hasOAuth1 ? `<button class="connect-btn" style="background: #f59e0b; font-size: 0.75rem;" onclick="connectTwitterMedia('${company.id}')">Enable Media</button>` : ''}
               ${hasTwitter ? `<button class="connect-btn" style="background: #e53e3e; font-size: 0.7rem; padding: 4px 8px;" onclick="disconnectAccount('${company.id}', 'twitter')">✕</button>` : ''}
               <span class="status ${hasMeta ? 'connected' : 'disconnected'}">
                 ${hasMeta ? '✓ Meta' : 'Meta'}
@@ -381,6 +383,23 @@
       } catch (error) {
         console.error('Error:', error);
         alert('Failed to connect to Twitter');
+      }
+    };
+
+    window.connectTwitterMedia = async (companyId) => {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/twitter-oauth/authorize-v1?company_id=${companyId}`, {
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const data = await response.json();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
+        } else {
+          alert('Failed to initiate media authorization: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to connect Twitter media posting');
       }
     };
 
