@@ -124,7 +124,10 @@ Deno.serve(async (req: Request) => {
       }
 
       const clientId = Deno.env.get("TWITTER_CLIENT_ID");
-      const redirectUri = "https://grayjackholdings.com/callback-twitter.html";
+      const origin = url.searchParams.get("origin") || "https://grayjackholdings.com";
+      const redirectUri = origin.includes("xignil.com")
+        ? `${origin}/callback/twitter`
+        : `${origin}/callback-twitter.html`;
 
       const codeVerifier = Array.from(crypto.getRandomValues(new Uint8Array(32)))
         .map(b => b.toString(16).padStart(2, '0'))
@@ -268,7 +271,10 @@ Deno.serve(async (req: Request) => {
         }, 500);
       }
 
-      const callbackUrl = "https://grayjackholdings.com/callback-twitter-v1.html";
+      const reqOrigin = url.searchParams.get("origin") || "https://grayjackholdings.com";
+      const callbackUrl = reqOrigin.includes("xignil.com")
+        ? `${reqOrigin}/callback/twitter-v1`
+        : `${reqOrigin}/callback-twitter-v1.html`;
       const requestTokenUrl = "https://api.twitter.com/oauth/request_token";
 
       // Sign the request with oauth_callback included in signature
