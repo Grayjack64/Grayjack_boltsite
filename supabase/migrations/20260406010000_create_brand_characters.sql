@@ -29,3 +29,6 @@ CREATE POLICY "Anon read brand_characters" ON brand_characters FOR SELECT TO ano
 DROP TRIGGER IF EXISTS update_brand_characters_updated_at ON brand_characters;
 CREATE TRIGGER update_brand_characters_updated_at
   BEFORE UPDATE ON brand_characters FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Add reference image for visual consistency
+ALTER TABLE brand_characters ADD COLUMN IF NOT EXISTS reference_image_url TEXT;
