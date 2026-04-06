@@ -675,6 +675,77 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: true, dm_event_id: dmData.data?.dm_event_id });
     }
 
+    // -----------------------------------------------------------------------
+    // Post a thread (chain of replies)
+    // -----------------------------------------------------------------------
+    if (path === "/post-thread" && req.method === "POST") {
+      const { company_id, tweets } = await req.json();
+
+      if (!company_id || !tweets || !Array.isArray(tweets) || tweets.length === 0) {
+        return jsonResponse({ error: "company_id and tweets array are required" }, 400);
+      }
+
+      const { data: account, error: fetchError } = await supabase
+        .from("twitter_accounts")
+        .select("*")
+        .eq("company_id", company_id)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (fetchError || !account) {
+        return jsonResponse({ error: "No active Twitter account found" }, 404);
+      }
+
+      const tweetIds: string[] = [];
+      let previousTweetId: string | null = null;
+
+      for (let i = 0; i < tweets.length; i++) {
+        const tweetBody: { text: string; reply?: { in_reply_to_tweet_id: string } } = {
+          text: tweets[i].text,
+        };
+
+        // Each tweet after the first replies to the previous one
+        if (previousTweetId) {
+          tweetBody.reply = { in_reply_to_tweet_id: previousTweetId };
+        }
+
+        const postResponse = await fetch("https://api.twitter.com/2/tweets", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${account.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(tweetBody),
+        });
+
+        if (!postResponse.ok) {
+          const error = await postResponse.text();
+          return jsonResponse({
+            error: `Failed to post tweet ${i + 1}/${tweets.length}`,
+            details: error,
+            tweets_posted: tweetIds,
+          }, 400);
+        }
+
+        const postData = await postResponse.json();
+        const tweetId = postData.data.id;
+        tweetIds.push(tweetId);
+        previousTweetId = tweetId;
+
+        // Small delay between tweets to avoid rate limits
+        if (i < tweets.length - 1) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+
+      return jsonResponse({
+        success: true,
+        thread_tweet_ids: tweetIds,
+        first_tweet_id: tweetIds[0],
+        tweet_count: tweetIds.length,
+      });
+    }
+
     return jsonResponse({ error: "Not found" }, 404);
 
   } catch (error) {
