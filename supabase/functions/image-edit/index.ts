@@ -103,54 +103,9 @@ Deno.serve(async (req: Request) => {
       }
 
       const editPrompt = prompt || "Replace the product in the scene with the product shown in the reference image. Match lighting, scale, and perspective.";
+      const errors: string[] = [];
 
-      // Try Runway first
-      if (RUNWAY_API_KEY) {
-        try {
-          // Runway image-to-image
-          const runwayRes = await fetch("https://api.dev.runwayml.com/v1/image_to_image", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${RUNWAY_API_KEY}`,
-              "Content-Type": "application/json",
-              "X-Runway-Version": "2024-11-06",
-            },
-            body: JSON.stringify({
-              model: "gen4.5",
-              promptImage: scene_image_url,
-              promptText: editPrompt + " Reference product: " + product_image_url,
-              ratio: "1280:720",
-            }),
-          });
-
-          if (runwayRes.ok) {
-            const taskData = await runwayRes.json();
-            const taskId = taskData.id;
-
-            // Poll for result
-            const startTime = Date.now();
-            while (Date.now() - startTime < 300000) {
-              const pollRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
-                headers: { "Authorization": `Bearer ${RUNWAY_API_KEY}`, "X-Runway-Version": "2024-11-06" },
-              });
-              const pollData = await pollRes.json();
-
-              if (pollData.status === "SUCCEEDED") {
-                const resultUrl = pollData.output?.[0] || pollData.artifacts?.[0]?.url;
-                if (resultUrl) {
-                  return jsonResponse({ success: true, image_url: resultUrl, provider: "runway" });
-                }
-              }
-              if (pollData.status === "FAILED") break;
-              await new Promise(r => setTimeout(r, 5000));
-            }
-          }
-        } catch (e) {
-          console.error("Runway failed:", e.message);
-        }
-      }
-
-      // Fallback to Gemini
+      // Gemini first — natively supports multi-image input for compositing
       if (GEMINI_API_KEY) {
         try {
           const sceneB64 = await imageUrlToBase64(scene_image_url);
@@ -185,14 +140,21 @@ Deno.serve(async (req: Request) => {
               await supabase.storage.from("blog-images").upload(filename, buffer, { contentType: "image/png" });
               const { data: urlData } = supabase.storage.from("blog-images").getPublicUrl(filename);
               return jsonResponse({ success: true, image_url: urlData.publicUrl, provider: "gemini" });
+            } else {
+              errors.push("Gemini: no image in response - " + JSON.stringify(geminiData).substring(0, 200));
             }
+          } else {
+            const errText = await geminiRes.text();
+            errors.push("Gemini: " + geminiRes.status + " - " + errText.substring(0, 200));
           }
         } catch (e) {
-          console.error("Gemini failed:", e.message);
+          errors.push("Gemini exception: " + e.message);
         }
+      } else {
+        errors.push("GEMINI_API_KEY not configured");
       }
 
-      return jsonResponse({ error: "Both Runway and Gemini failed to edit the image" }, 500);
+      return jsonResponse({ error: "Image edit failed", details: errors.join(" | ") }, 500);
     }
 
     // -----------------------------------------------------------------------
