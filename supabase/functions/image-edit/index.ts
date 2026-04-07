@@ -112,7 +112,7 @@ Deno.serve(async (req: Request) => {
           const productB64 = await imageUrlToBase64(product_image_url);
 
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=${GEMINI_API_KEY}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -172,7 +172,7 @@ Deno.serve(async (req: Request) => {
           const imgB64 = await imageUrlToBase64(image_url);
 
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=${GEMINI_API_KEY}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
