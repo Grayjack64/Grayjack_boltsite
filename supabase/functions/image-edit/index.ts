@@ -242,6 +242,66 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Image edit failed with all providers" }, 500);
     }
 
+    // -----------------------------------------------------------------------
+    // Product Scene — generate an image with a real product composited into a scene
+    // -----------------------------------------------------------------------
+    if (path === "/product-scene") {
+      const { product_image_url, scene_prompt, product_name } = body;
+      if (!product_image_url || !scene_prompt) {
+        return jsonResponse({ error: "product_image_url and scene_prompt are required" }, 400);
+      }
+      if (!GEMINI_API_KEY) return jsonResponse({ error: "GEMINI_API_KEY not configured" }, 500);
+
+      try {
+        const productB64 = await imageUrlToBase64(product_image_url);
+
+        const prompt = `Generate a photorealistic image for a social media ad or video thumbnail.
+The scene: ${scene_prompt}
+
+CRITICAL: The exact product shown in the reference image MUST appear prominently in the generated scene.
+This is ${product_name || 'the product'}. Keep the product's label, colors, shape, and branding exactly as shown.
+Place the product naturally in the scene — on a surface, being held, or positioned where it makes sense.
+The product should be clearly visible and recognizable, not tiny or hidden.
+Photorealistic quality, commercial photography style, good lighting.`;
+
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_API_KEY ? 'gemini-3-pro-image-preview' : ''}:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType: "image/png", data: productB64 } },
+                  { text: prompt },
+                ],
+              }],
+              generationConfig: { responseModalities: ["IMAGE"] },
+            }),
+          }
+        );
+
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          const imgPart = geminiData.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+          if (imgPart) {
+            const resultB64 = imgPart.inlineData.data;
+            const buffer = Uint8Array.from(atob(resultB64), c => c.charCodeAt(0));
+            const filename = `product-scene-${Date.now()}.png`;
+            await supabase.storage.from("blog-images").upload(filename, buffer, { contentType: "image/png" });
+            const { data: urlData } = supabase.storage.from("blog-images").getPublicUrl(filename);
+            return jsonResponse({ success: true, image_url: urlData.publicUrl });
+          }
+        }
+
+        const errText = await geminiRes.text();
+        return jsonResponse({ error: "Product scene generation failed", details: errText.substring(0, 200) }, 500);
+      } catch (e) {
+        return jsonResponse({ error: "Product scene failed: " + e.message }, 500);
+      }
+    }
+
     return jsonResponse({ error: "Not found" }, 404);
 
   } catch (error) {
