@@ -352,7 +352,7 @@ Deno.serve(async (req: Request) => {
     // Post to Facebook Page
     // -----------------------------------------------------------------------
     if (path === "/post-facebook" && req.method === "POST") {
-      const { company_id, text, image_url } = await req.json();
+      const { company_id, text, image_url, video_url } = await req.json();
 
       if (!company_id || !text) {
         return jsonResponse({ error: "company_id and text are required" }, 400);
@@ -371,7 +371,21 @@ Deno.serve(async (req: Request) => {
 
       let postRes: Response;
 
-      if (image_url) {
+      if (video_url) {
+        // Video post — upload via resumable or URL
+        postRes = await fetch(
+          `${GRAPH_URL}/${account.facebook_page_id}/videos`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              file_url: video_url,
+              description: text,
+              access_token: account.page_access_token,
+            }),
+          }
+        );
+      } else if (image_url) {
         // Photo post
         postRes = await fetch(
           `${GRAPH_URL}/${account.facebook_page_id}/photos`,
@@ -417,11 +431,11 @@ Deno.serve(async (req: Request) => {
     // Post to Instagram (two-step: create container, then publish)
     // -----------------------------------------------------------------------
     if (path === "/post-instagram" && req.method === "POST") {
-      const { company_id, caption, image_url } = await req.json();
+      const { company_id, caption, image_url, video_url } = await req.json();
 
-      if (!company_id || !caption || !image_url) {
+      if (!company_id || !caption || (!image_url && !video_url)) {
         return jsonResponse({
-          error: "company_id, caption, and image_url are required (Instagram requires an image)",
+          error: "company_id, caption, and either image_url or video_url are required",
         }, 400);
       }
 
@@ -442,17 +456,28 @@ Deno.serve(async (req: Request) => {
         }, 400);
       }
 
-      // Step 1: Create media container
+      // Step 1: Create media container (image or Reels video)
+      const containerBody: Record<string, string> = {
+        caption,
+        access_token: account.page_access_token,
+      };
+
+      if (video_url) {
+        // Instagram Reels
+        containerBody.media_type = "REELS";
+        containerBody.video_url = video_url;
+        containerBody.share_to_feed = "true";
+      } else {
+        // Image post
+        containerBody.image_url = image_url;
+      }
+
       const containerRes = await fetch(
         `${GRAPH_URL}/${account.instagram_business_account_id}/media`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_url,
-            caption,
-            access_token: account.page_access_token,
-          }),
+          body: JSON.stringify(containerBody),
         }
       );
 
@@ -464,10 +489,27 @@ Deno.serve(async (req: Request) => {
       const containerData = await containerRes.json();
       const creationId = containerData.id;
 
-      // Brief wait for Instagram to process the image
-      await new Promise((r) => setTimeout(r, 3000));
+      // Step 2: Poll until container is ready (videos need processing time)
+      if (video_url) {
+        const maxWait = 120000; // 2 minutes max
+        const start = Date.now();
+        while (Date.now() - start < maxWait) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const statusRes = await fetch(
+            `${GRAPH_URL}/${creationId}?fields=status_code&access_token=${account.page_access_token}`
+          );
+          const statusData = await statusRes.json();
+          if (statusData.status_code === "FINISHED") break;
+          if (statusData.status_code === "ERROR") {
+            return jsonResponse({ error: "Instagram video processing failed", details: JSON.stringify(statusData) }, 400);
+          }
+        }
+      } else {
+        // Brief wait for image processing
+        await new Promise((r) => setTimeout(r, 3000));
+      }
 
-      // Step 2: Publish
+      // Step 3: Publish
       const publishRes = await fetch(
         `${GRAPH_URL}/${account.instagram_business_account_id}/media_publish`,
         {
@@ -490,6 +532,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({
         success: true,
         media_id: publishData.id,
+        type: video_url ? "reel" : "image",
       });
     }
 
