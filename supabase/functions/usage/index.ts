@@ -36,14 +36,14 @@ const ACTION_MAP: Record<string, { limitCol: string; usageCol: string }> = {
   post: { limitCol: "posts_per_company", usageCol: "posts_generated" },
   video: { limitCol: "videos_per_company", usageCol: "videos_generated" },
   storyboard_preview: {
-    limitCol: "storyboard_previews_per_company",
-    usageCol: "storyboard_previews_generated",
+    limitCol: "storyboard_previews",
+    usageCol: "storyboard_previews_used",
   },
   ai_response: {
-    limitCol: "ai_responses_per_company",
-    usageCol: "ai_responses_generated",
+    limitCol: "response_drafting_enabled",
+    usageCol: "ai_responses_drafted",
   },
-  ab_test: { limitCol: "ab_tests_per_company", usageCol: "ab_tests_run" },
+  ab_test: { limitCol: "ab_testing_enabled", usageCol: "ab_tests_run" },
 };
 
 function currentMonth(): string {
@@ -120,17 +120,30 @@ async function handleCheck(url: URL) {
     return jsonResponse({ error: `No tier config for tier: ${info.tier}` }, 404);
   }
 
-  const limit = limits[mapping.limitCol] as number;
+  const limitVal = limits[mapping.limitCol];
   const usage = await getUsage(companyId, currentMonth());
   const used = (usage[mapping.usageCol] as number) || 0;
 
-  // A limit of -1 or null means unlimited
-  const allowed = limit === -1 || limit === null || used < limit;
+  // For boolean features (response_drafting_enabled, ab_testing_enabled)
+  if (typeof limitVal === "boolean") {
+    return jsonResponse({
+      allowed: limitVal === true,
+      used,
+      limit: limitVal ? "unlimited" : 0,
+      tier: info.tier,
+    });
+  }
+
+  const limit = limitVal as number;
+
+  // 0 = unlimited, -1 = unlimited, null = unlimited
+  const isUnlimited = limit === 0 || limit === -1 || limit === null || limit === undefined;
+  const allowed = isUnlimited || used < limit;
 
   return jsonResponse({
     allowed,
     used,
-    limit: limit === -1 ? "unlimited" : limit,
+    limit: isUnlimited ? "unlimited" : limit,
     tier: info.tier,
   });
 }
@@ -206,37 +219,34 @@ async function handleSummary(url: URL) {
 
   const usage = await getUsage(companyId, currentMonth());
 
+  const fmt = (v: number) => (v === 0 || v === -1 || v === null || v === undefined) ? "unlimited" : v;
+
   const postsLimit = limits.posts_per_company as number;
   const videosLimit = limits.videos_per_company as number;
   const postsUsed = (usage.posts_generated as number) || 0;
   const videosUsed = (usage.videos_generated as number) || 0;
-  const previewsLimit = limits.storyboard_previews_per_company as number;
-  const previewsUsed = (usage.storyboard_previews_generated as number) || 0;
-  const aiResponsesLimit = limits.ai_responses_per_company as number;
-  const aiResponsesUsed = (usage.ai_responses_generated as number) || 0;
+  const previewsLimit = limits.storyboard_previews as number;
+  const previewsUsed = (usage.storyboard_previews_used as number) || 0;
+  const aiResponsesUsed = (usage.ai_responses_drafted as number) || 0;
+
+  const postsUnlimited = postsLimit === 0 || postsLimit === -1;
+  const videosUnlimited = videosLimit === 0 || videosLimit === -1;
 
   return jsonResponse({
     tier: info.tier,
     limits: {
-      posts_per_company: postsLimit === -1 ? "unlimited" : postsLimit,
-      videos_per_company: videosLimit === -1 ? "unlimited" : videosLimit,
-      storyboard_previews_per_company:
-        previewsLimit === -1 ? "unlimited" : previewsLimit,
-      ai_responses_per_company:
-        aiResponsesLimit === -1 ? "unlimited" : aiResponsesLimit,
+      posts_per_company: fmt(postsLimit),
+      videos_per_company: fmt(videosLimit),
+      storyboard_previews: fmt(previewsLimit),
     },
     usage: {
       posts_generated: postsUsed,
       videos_generated: videosUsed,
-      storyboard_previews_generated: previewsUsed,
-      ai_responses_generated: aiResponsesUsed,
+      storyboard_previews_used: previewsUsed,
+      ai_responses_drafted: aiResponsesUsed,
     },
-    posts_remaining:
-      postsLimit === -1 ? "unlimited" : Math.max(0, postsLimit - postsUsed),
-    videos_remaining:
-      videosLimit === -1
-        ? "unlimited"
-        : Math.max(0, videosLimit - videosUsed),
+    posts_remaining: postsUnlimited ? "unlimited" : Math.max(0, postsLimit - postsUsed),
+    videos_remaining: videosUnlimited ? "unlimited" : Math.max(0, videosLimit - videosUsed),
   });
 }
 
