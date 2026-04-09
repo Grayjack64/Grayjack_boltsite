@@ -54,7 +54,7 @@ const CREDIT_COSTS: Record<string, Record<string, number>> = {
   scene_regen_premium: { cost: 40 },
   voiceover_regen: { cost: 10 },
   recompose: { cost: 10 },
-  storyboard_preview: { cost: 5 },
+  storyboard_preview: { cost: 0 },
 };
 
 function currentMonth(): string {
