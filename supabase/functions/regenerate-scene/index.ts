@@ -169,7 +169,8 @@ Deno.serve(async (req) => {
     }
 
     if (action === "clip") {
-      // Mark scene for clip regeneration and set draft to pending_recompose
+      // Flag scene for regeneration — does NOT trigger recompose.
+      // User clicks "Recompose Video" when ready.
       scene.clip_url = null;
       scene.needs_regen = true;
 
@@ -177,7 +178,6 @@ Deno.serve(async (req) => {
         .from("content_drafts")
         .update({
           video_script: script,
-          status: "pending_recompose",
           updated_at: new Date().toISOString(),
         })
         .eq("id", draft_id);
@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
       return jsonResponse({
         success: true,
         message:
-          "Clip regeneration queued. The video engine will regenerate this scene and recompose the video.",
+          "Scene flagged for regeneration. Click 'Recompose Video' when you're done editing to rebuild the video.",
       });
     }
 
