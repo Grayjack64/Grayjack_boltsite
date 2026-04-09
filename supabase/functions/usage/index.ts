@@ -46,6 +46,17 @@ const ACTION_MAP: Record<string, { limitCol: string; usageCol: string }> = {
   ab_test: { limitCol: "ab_testing_enabled", usageCol: "ab_tests_run" },
 };
 
+// Credit costs per action
+const CREDIT_COSTS: Record<string, Record<string, number>> = {
+  video_standard: { cost: 100 },
+  video_premium: { cost: 200 },
+  scene_regen_standard: { cost: 20 },
+  scene_regen_premium: { cost: 40 },
+  voiceover_regen: { cost: 10 },
+  recompose: { cost: 10 },
+  storyboard_preview: { cost: 5 },
+};
+
 function currentMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -225,29 +236,112 @@ async function handleSummary(url: URL) {
   const videosLimit = limits.videos_per_company as number;
   const postsUsed = (usage.posts_generated as number) || 0;
   const videosUsed = (usage.videos_generated as number) || 0;
-  const previewsLimit = limits.storyboard_previews as number;
   const previewsUsed = (usage.storyboard_previews_used as number) || 0;
   const aiResponsesUsed = (usage.ai_responses_drafted as number) || 0;
+  const creditsUsed = (usage.video_credits_consumed as number) || 0;
+  const creditsLimit = (limits as any).video_credits_per_company as number;
 
   const postsUnlimited = postsLimit === 0 || postsLimit === -1;
   const videosUnlimited = videosLimit === 0 || videosLimit === -1;
+  const creditsUnlimited = creditsLimit === 0 || creditsLimit >= 99999;
 
   return jsonResponse({
     tier: info.tier,
     limits: {
       posts_per_company: fmt(postsLimit),
       videos_per_company: fmt(videosLimit),
-      storyboard_previews: fmt(previewsLimit),
+      video_credits: creditsUnlimited ? "unlimited" : creditsLimit,
     },
     usage: {
       posts_generated: postsUsed,
       videos_generated: videosUsed,
       storyboard_previews_used: previewsUsed,
       ai_responses_drafted: aiResponsesUsed,
+      video_credits_consumed: creditsUsed,
     },
     posts_remaining: postsUnlimited ? "unlimited" : Math.max(0, postsLimit - postsUsed),
     videos_remaining: videosUnlimited ? "unlimited" : Math.max(0, videosLimit - videosUsed),
+    credits_remaining: creditsUnlimited ? "unlimited" : Math.max(0, creditsLimit - creditsUsed),
+    credit_costs: CREDIT_COSTS,
   });
+}
+
+// ── CREDIT CHECK ────────────────────────────────────────────────────────────
+
+async function handleCreditCheck(url: URL) {
+  const companyId = url.searchParams.get("company_id");
+  const action = url.searchParams.get("action"); // e.g. video_standard, scene_regen_premium, voiceover_regen, recompose, storyboard_preview
+
+  if (!companyId || !action) {
+    return jsonResponse({ error: "company_id and action are required" }, 400);
+  }
+
+  const costEntry = CREDIT_COSTS[action];
+  if (!costEntry) {
+    return jsonResponse({ error: `Unknown credit action: ${action}` }, 400);
+  }
+
+  const info = await getCompanyOrg(companyId);
+  if (!info) return jsonResponse({ error: "Company or org not found" }, 404);
+
+  const limits = await getTierLimits(info.tier);
+  if (!limits) return jsonResponse({ error: `No tier config for: ${info.tier}` }, 404);
+
+  const creditLimit = (limits as any).video_credits_per_company as number;
+  const usage = await getUsage(companyId, currentMonth());
+  const creditsUsed = (usage.video_credits_consumed as number) || 0;
+  const cost = costEntry.cost;
+
+  const isUnlimited = creditLimit === 0 || creditLimit >= 99999;
+  const allowed = isUnlimited || (creditsUsed + cost) <= creditLimit;
+
+  return jsonResponse({
+    allowed,
+    credits_used: creditsUsed,
+    credits_limit: isUnlimited ? "unlimited" : creditLimit,
+    credits_remaining: isUnlimited ? "unlimited" : Math.max(0, creditLimit - creditsUsed),
+    cost,
+    action,
+    tier: info.tier,
+  });
+}
+
+// ── CREDIT TRACK ────────────────────────────────────────────────────────────
+
+async function handleCreditTrack(req: Request) {
+  const body = await req.json().catch(() => null);
+  if (!body?.company_id || !body?.action) {
+    return jsonResponse({ error: "company_id and action are required" }, 400);
+  }
+
+  const { company_id, action } = body;
+  const costEntry = CREDIT_COSTS[action];
+  if (!costEntry) {
+    return jsonResponse({ error: `Unknown credit action: ${action}` }, 400);
+  }
+
+  const info = await getCompanyOrg(company_id);
+  if (!info) return jsonResponse({ error: "Company or org not found" }, 404);
+
+  const month = currentMonth();
+  const usage = await getUsage(company_id, month);
+  const currentCredits = (usage.video_credits_consumed as number) || 0;
+  const newCredits = currentCredits + costEntry.cost;
+
+  if (Object.keys(usage).length === 0 || !usage.company_id) {
+    await supabase.from("company_usage").upsert(
+      { company_id, org_id: info.orgId, month, video_credits_consumed: costEntry.cost },
+      { onConflict: "company_id,month" },
+    );
+  } else {
+    await supabase
+      .from("company_usage")
+      .update({ video_credits_consumed: newCredits })
+      .eq("company_id", company_id)
+      .eq("month", month);
+  }
+
+  return jsonResponse({ success: true, credits_consumed: newCredits, cost: costEntry.cost });
 }
 
 // ── ROUTER ───────────────────────────────────────────────────────────────────
@@ -283,6 +377,14 @@ Deno.serve(async (req: Request) => {
 
     if (req.method === "POST" && path === "/track") {
       return await handleTrack(req);
+    }
+
+    if (req.method === "GET" && path === "/credit-check") {
+      return await handleCreditCheck(url);
+    }
+
+    if (req.method === "POST" && path === "/credit-track") {
+      return await handleCreditTrack(req);
     }
 
     return jsonResponse({ error: "Not found" }, 404);
