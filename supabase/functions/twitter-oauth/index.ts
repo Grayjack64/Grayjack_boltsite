@@ -696,32 +696,6 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "No active Twitter account found" }, 404);
       }
 
-      // Refresh token if expired
-      let accessToken = account.access_token;
-      if (account.refresh_token && account.token_expires_at && new Date(account.token_expires_at) < new Date()) {
-        const clientId = Deno.env.get("TWITTER_CLIENT_ID") || "";
-        const clientSecret = Deno.env.get("TWITTER_CLIENT_SECRET") || "";
-        const refreshRes = await fetch("https://api.twitter.com/2/oauth2/token", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Authorization": `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-          },
-          body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: account.refresh_token }),
-        });
-        if (refreshRes.ok) {
-          const tokenData = await refreshRes.json();
-          accessToken = tokenData.access_token;
-          const expiresAt = new Date();
-          expiresAt.setSeconds(expiresAt.getSeconds() + tokenData.expires_in);
-          await supabase.from("twitter_accounts").update({
-            access_token: tokenData.access_token,
-            refresh_token: tokenData.refresh_token || account.refresh_token,
-            token_expires_at: expiresAt.toISOString(),
-          }).eq("company_id", company_id);
-        }
-      }
-
       const tweetIds: string[] = [];
       let previousTweetId: string | null = null;
 
@@ -730,6 +704,7 @@ Deno.serve(async (req: Request) => {
           text: tweets[i].text,
         };
 
+        // Each tweet after the first replies to the previous one
         if (previousTweetId) {
           tweetBody.reply = { in_reply_to_tweet_id: previousTweetId };
         }
@@ -737,17 +712,17 @@ Deno.serve(async (req: Request) => {
         const postResponse = await fetch("https://api.twitter.com/2/tweets", {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${accessToken}`,
+            "Authorization": `Bearer ${account.access_token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify(tweetBody),
         });
 
         if (!postResponse.ok) {
-          const errText = await postResponse.text();
+          const error = await postResponse.text();
           return jsonResponse({
             error: `Failed to post tweet ${i + 1}/${tweets.length}`,
-            details: errText,
+            details: error,
             tweets_posted: tweetIds,
           }, 400);
         }
@@ -757,9 +732,9 @@ Deno.serve(async (req: Request) => {
         tweetIds.push(tweetId);
         previousTweetId = tweetId;
 
-        // Delay between tweets to avoid rate limits
+        // Small delay between tweets to avoid rate limits
         if (i < tweets.length - 1) {
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 500));
         }
       }
 
